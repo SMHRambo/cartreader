@@ -4,15 +4,14 @@
    This project represents a community-driven effort to provide
    an easy to build and easy to modify cartridge dumper.
 
-   Date:             19.08.2022
-   Version:          9.5
+   Date:             28.08.2022
+   Version:          9.6
 
    SD lib: https://github.com/greiman/SdFat
    OLED lib: https://github.com/adafruit/Adafruit_SSD1306
    GFX Lib: https://github.com/adafruit/Adafruit-GFX-Library
    BusIO: https://github.com/adafruit/Adafruit_BusIO
    LCD lib: https://github.com/olikraus/u8g2
-   RGB Tools lib: https://github.com/joushx/Arduino-RGB-Tools
    Neopixel lib: https://github.com/adafruit/Adafruit_NeoPixel
    Rotary Enc lib: https://github.com/mathertel/RotaryEncoder
    SI5351 lib: https://github.com/etherkit/Si5351Arduino
@@ -25,7 +24,7 @@
    MichlK - ROM Reader for Super Nintendo
    Jeff Saltzman - 4-Way Button
    Wayne and Layne - Video Game Shield menu
-   skaman - Cart ROM READER SNES ENHANCED, Famicom Cart Dumper, Coleco- and Intellivision modules
+   skaman - Cart ROM READER SNES ENHANCED, Famicom Cart Dumper, Coleco-, Intellivision, Virtual Boy, WSV modules
    Tamanegi_taro - PCE and Satellaview modules
    splash5 - GBSmart, Wonderswan and NGP modules
    hkz & themanbehindthecurtain - N64 flashram commands
@@ -40,8 +39,8 @@
 
    And a special Thank You to all coders and contributors on Github and the Arduino forum:
    jiyunomegami, splash5, Kreeblah, ramapcsx2, PsyK0p4T, Dakkaron, majorpbx, Pickle, sdhizumi,
-   Uzlopak, sakman55, Tombo89, scrap-a, Tombo89, borti4938, vogelfreiheit, CaitSith2, Modman,
-   philenotfound, karimhadjsalem, nsx0r
+   Uzlopak, sakman55, Tombo89, scrap-a, borti4938, vogelfreiheit, CaitSith2, Modman,
+   philenotfound, karimhadjsalem, nsx0r, ducky92, niklasweber, lesserkuma
 
    And to nocash for figuring out the secrets of the SFC Nintendo Power cartridge.
 
@@ -60,7 +59,7 @@
 
 **********************************************************************************/
 
-char ver[5] = "9.5";
+char ver[5] = "9.6";
 
 //******************************************
 // !!! CHOOSE HARDWARE VERSION !!!
@@ -97,6 +96,7 @@ char ver[5] = "9.5";
 // #define enable_INTV
 // #define enable_COLV
 // #define enable_VBOY
+// #define enable_WSV
 
 //******************************************
 // HW CONFIGS
@@ -116,6 +116,7 @@ char ver[5] = "9.5";
 #define enable_OLED
 #define enable_Button2
 #define clockgen_installed
+#define CA_LED
 //#define fastcrc
 #endif
 
@@ -229,13 +230,6 @@ int rotaryPos = 0;
 // Neopixel
 #include <Adafruit_NeoPixel.h>
 Adafruit_NeoPixel pixels(3, 13, NEO_GRB + NEO_KHZ800);
-#else
-#ifndef enable_LCD
-// 4 Pin RGB LED
-#include <RGBTools.h>
-// Set pins of red, green and blue
-RGBTools rgb(12, 11, 10);
-#endif
 #endif
 
 typedef enum COLOR_T {
@@ -305,6 +299,7 @@ bool i2c_found;
 #define mode_INTV 23
 #define mode_COL 24
 #define mode_VBOY 25
+#define mode_WSV 26
 
 // optimization-safe nop delay
 #define NOP __asm__ __volatile__ ("nop\n\t")
@@ -683,7 +678,8 @@ boolean compareCRC(char* database, char* crcString, boolean renamerom, int offse
     }
   }
   else {
-    println_Msg(F(" -> database file not found"));
+    println_Msg(F(" -> Error"));
+    println_Msg(F("Database missing"));
     return 0;
   }
 #else
@@ -798,7 +794,7 @@ byte starting_letter() {
 static const char modeItem1[] PROGMEM = "Game Boy";
 static const char modeItem2[] PROGMEM = "NES/Famicom";
 static const char modeItem3[] PROGMEM = "Super Nintendo";
-static const char modeItem4[] PROGMEM = "Nintendo 64";
+static const char modeItem4[] PROGMEM = "Nintendo 64 (3V)";
 static const char modeItem5[] PROGMEM = "Mega Drive";
 static const char modeItem6[] PROGMEM = "SMS/GG/MIII/SG-1000";
 static const char modeItem7[] PROGMEM = "PC Engine/TG16";
@@ -807,19 +803,20 @@ static const char modeItem9[] PROGMEM = "NeoGeo Pocket";
 static const char modeItem10[] PROGMEM = "Intellvision";
 static const char modeItem11[] PROGMEM = "Colecovision";
 static const char modeItem12[] PROGMEM = "Virtual Boy";
-static const char modeItem13[] PROGMEM = "Flashrom Programmer";
-static const char modeItem14[] PROGMEM = "About";
-static const char* const modeOptions[] PROGMEM = {modeItem1, modeItem2, modeItem3, modeItem4, modeItem5, modeItem6, modeItem7, modeItem8, modeItem9, modeItem10, modeItem11, modeItem12, modeItem13, modeItem14};
+static const char modeItem13[] PROGMEM = "Watara Supervision";
+static const char modeItem14[] PROGMEM = "Flashrom Programmer";
+static const char modeItem15[] PROGMEM = "About";
+static const char* const modeOptions[] PROGMEM = {modeItem1, modeItem2, modeItem3, modeItem4, modeItem5, modeItem6, modeItem7, modeItem8, modeItem9, modeItem10, modeItem11, modeItem12, modeItem13, modeItem14, modeItem15};
 
 // All included slots
 void mainMenu() {
-  // create menu with title and 13 options to choose from
+  // create menu with title and 15 options to choose from
   unsigned char modeMenu;
 
   // Main menu spans across two pages
   currPage = 1;
   lastPage = 1;
-  numPages = 2;
+  numPages = 3;
 
   while (1) {
     if (currPage == 1) {
@@ -831,6 +828,11 @@ void mainMenu() {
       // Copy menuOptions out of progmem
       convertPgm(modeOptions, 7, 7);
       modeMenu = question_box(F("OPEN SOURCE CART READER"), menuOptions, 7, 0);
+    }
+    if (currPage == 3) {
+      // Copy menuOptions out of progmem
+      convertPgm(modeOptions, 14, 1);
+      modeMenu = question_box(F("OPEN SOURCE CART READER"), menuOptions, 1, 0);
     }
     if (numPages == 0) {
       // Execute choice
@@ -941,8 +943,15 @@ void mainMenu() {
       break;
 #endif
 
-#ifdef enable_FLASH
+#ifdef enable_WSV
     case 12:
+      setup_WSV();
+      wsvMenu();
+      break;
+#endif
+
+#ifdef enable_FLASH
+    case 13:
 #ifdef enable_FLASH16
       flashMenu();
 #else
@@ -951,7 +960,7 @@ void mainMenu() {
       break;
 #endif
 
-    case 13:
+    case 14:
       aboutScreen();
       break;
 
@@ -971,7 +980,7 @@ void mainMenu() {
 static const char modeItem1[] PROGMEM = "Add-ons";
 static const char modeItem2[] PROGMEM = "Super Nintendo";
 static const char modeItem3[] PROGMEM = "Mega Drive";
-static const char modeItem4[] PROGMEM = "Nintendo 64";
+static const char modeItem4[] PROGMEM = "Nintendo 64 (3V)";
 static const char modeItem5[] PROGMEM = "Game Boy";
 static const char modeItem6[] PROGMEM = "About";
 static const char modeItem7[] PROGMEM = "Reset";
@@ -997,8 +1006,9 @@ static const char* const consolesOptions[] PROGMEM = {consolesItem1, consolesIte
 static const char handheldsItem1[] PROGMEM = "Virtual Boy";
 static const char handheldsItem2[] PROGMEM = "WonderSwan";
 static const char handheldsItem3[] PROGMEM = "NeoGeo Pocket";
-static const char handheldsItem4[] PROGMEM = "Reset";
-static const char* const handheldsOptions[] PROGMEM = {handheldsItem1, handheldsItem2, handheldsItem3, handheldsItem4};
+static const char handheldsItem4[] PROGMEM = "Watara Supervision";
+static const char handheldsItem5[] PROGMEM = "Reset";
+static const char* const handheldsOptions[] PROGMEM = {handheldsItem1, handheldsItem2, handheldsItem3, handheldsItem4, handheldsItem5};
 
 // All included slots
 void mainMenu() {
@@ -1160,21 +1170,19 @@ void consoleMenu() {
 
 // Everything that needs an adapter
 void handheldMenu() {
-  // create menu with title and 4 options to choose from
+  // create menu with title and 5 options to choose from
   unsigned char handheldsMenu;
   // Copy menuOptions out of progmem
-  convertPgm(handheldsOptions, 4);
-  handheldsMenu = question_box(F("Choose Adapter"), menuOptions, 4, 0);
+  convertPgm(handheldsOptions, 5);
+  handheldsMenu = question_box(F("Choose Adapter"), menuOptions, 5, 0);
 
   // wait for user choice to come back from the question box menu
   switch (handheldsMenu)
   {
 #ifdef enable_VBOY
     case 0:
-      mode = mode_VBOY;
-      display_Clear();
-      display_Update();
       setup_VBOY();
+      vboyMenu();
       break;
 #endif
 
@@ -1196,7 +1204,14 @@ void handheldMenu() {
       break;
 #endif
 
+#ifdef enable_WSV
     case 3:
+      setup_WSV();
+      wsvMenu();
+      break;
+#endif
+
+    case 4:
       resetArduino();
       break;
 
@@ -1696,6 +1711,19 @@ void setup() {
 #if !(defined(enable_serial) || defined(HW5))
   DDRE |= (1 << 1);
 #endif
+#else
+#ifndef enable_LCD
+#ifdef CA_LED
+  // Turn LED off
+  digitalWrite(12, 1);
+  digitalWrite(11, 1);
+  digitalWrite(10, 1);
+#endif
+  // Configure 4 Pin RGB LED pins as output
+  DDRB |= (1 << DDB6); // Red LED (pin 12)
+  DDRB |= (1 << DDB5); // Green LED (pin 11)
+  DDRB |= (1 << DDB4); // Blue LED (pin 10)
+#endif
 #endif
 
 #ifdef enable_OLED
@@ -1783,7 +1811,7 @@ void dataIn() {
  *****************************************/
 // Set RGB color
 void setColor_RGB(byte r, byte g, byte b) {
-#ifdef enable_neopixel
+#if defined(enable_neopixel)
   // Dim Neopixel LEDs
   if (r >= 100) r = 100;
   if (g >= 100) g = 100;
@@ -1793,8 +1821,16 @@ void setColor_RGB(byte r, byte g, byte b) {
   pixels.setPixelColor(1, pixels.Color(g, r, b));
   pixels.setPixelColor(2, pixels.Color(g, r, b));
   pixels.show();
+#elif defined(CA_LED)
+  // Set color of analog 4 Pin common anode RGB LED
+  analogWrite(12, 255 - r);
+  analogWrite(11, 255 - g);
+  analogWrite(10, 255 - b);
 #else
-  rgb.setColor(r, g, b);
+  // Set color of analog 4 Pin common cathode RGB LED
+  analogWrite(12, r);
+  analogWrite(11, g);
+  analogWrite(10, b);
 #endif
 }
 
@@ -3371,6 +3407,11 @@ void loop() {
 #ifdef enable_VBOY
   else if (mode == mode_VBOY) {
     vboyMenu();
+  }
+#endif
+#ifdef enable_WSV
+  else if (mode == mode_WSV) {
+    wsvMenu();
   }
 #endif
   else {
