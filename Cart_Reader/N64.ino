@@ -22,9 +22,9 @@ bool tempBits[65];
 int eepPages;
 
 // N64 Controller
-// 256 bits of received Controller data
-char N64_raw_dump[257];
-// Array that holds one Controller Pak block of 32 bytes
+// 256 bits of received Controller data + 8 bit CRC
+char N64_raw_dump[265];
+// Array that holds one Controller Pak block of 32 bytes data
 byte myBlock[33];
 String rawStr = ""; // above char array read into a string
 struct {
@@ -192,10 +192,12 @@ void n64ControllerMenu() {
 
     case 1:
       resetController();
+      checkController();
       display_Clear();
       display_Update();
       readMPK();
-      checksumMPK();
+      verifyCRC();
+      validateMPK();
       println_Msg(F(""));
       println_Msg(F("Press Button..."));
       display_Update();
@@ -204,6 +206,7 @@ void n64ControllerMenu() {
 
     case 2:
       resetController();
+      checkController();
       display_Clear();
       display_Update();
       // Change to root
@@ -605,26 +608,25 @@ static word addrCRC(word address) {
   return address | crc;
 }
 
-// unused
-//static byte dataCRC(byte * data) {
-//  byte ret = 0;
-//  for (byte i = 0; i <= 32; i++) {
-//    for (byte j = 7; j >= 0; j--) {
-//      int tmp = 0;
-//      if (ret & 0x80) {
-//        tmp = 0x85;
-//      }
-//      ret <<= 1;
-//      if ( i < 32 ) {
-//        if (data[i] & (0x01 << j)) {
-//          ret |= 0x1;
-//        }
-//      }
-//      ret ^= tmp;
-//    }
-//  }
-//  return ret;
-//}
+static uint8_t dataCRC( uint8_t *data ) {
+  uint8_t ret = 0;
+  for ( int i = 0; i <= 32; i++ ) {
+    for ( int j = 7; j >= 0; j-- ) {
+      int tmp = 0;
+      if ( ret & 0x80 ) {
+        tmp = 0x85;
+      }
+      ret <<= 1;
+      if ( i < 32 ) {
+        if ( data[i] & (0x01 << j) ) {
+          ret |= 0x1;
+        }
+      }
+      ret ^= tmp;
+    }
+  }
+  return ret;
+}
 
 /******************************************
    N64 Controller Protocol Functions
@@ -795,6 +797,11 @@ void get_button()
   unsigned char command[] = {
     0x01
   };
+
+  // Empty buffer
+  for (word i = 0; i < 265; i++) {
+    N64_raw_dump[i] = 0xFF;
+  }
 
   // don't want interrupts getting in the way
   noInterrupts();
@@ -1952,8 +1959,63 @@ void resetController() {
   delay(100);
 }
 
-// read 32bytes from controller pak
-void readBlock(word myAddress) {
+// read 3 bytes from controller
+void checkController() {
+  display_Clear();
+
+  // Check if line is HIGH
+  if (!N64_QUERY)
+    print_Error(F("Data line LOW"), true);
+
+  // Send status command
+  unsigned char command[] = {0x0};
+
+  // Empty buffer
+  for (word i = 0; i < 265; i++) {
+    N64_raw_dump[i] = 0xFF;
+  }
+
+  // don't want interrupts getting in the way
+  noInterrupts();
+  N64_send(command, 1);
+  N64_stop();
+  // read in data
+  N64_get(32);
+  // end of time sensitive code
+  interrupts();
+
+  // Empty N64_raw_dump into myBlock
+  for (word i = 0; i < 32; i += 8) {
+    boolean byteFlipped[9];
+
+    // Flip byte order
+    byteFlipped[0] = N64_raw_dump[i + 7];
+    byteFlipped[1] = N64_raw_dump[i + 6];
+    byteFlipped[2] = N64_raw_dump[i + 5];
+    byteFlipped[3] = N64_raw_dump[i + 4];
+    byteFlipped[4] = N64_raw_dump[i + 3];
+    byteFlipped[5] = N64_raw_dump[i + 2];
+    byteFlipped[6] = N64_raw_dump[i + 1];
+    byteFlipped[7] = N64_raw_dump[i + 0];
+
+    // Join bits into one byte
+    unsigned char myByte = 0;
+    for (byte j = 0; j < 8; ++j) {
+      if (byteFlipped[j]) {
+        myByte |= 1 << j;
+      }
+    }
+    if ((i == 0) && (myByte != 0x05))
+      print_Error(F("Controller not found"), true);
+    if ((i == 16) && (myByte != 0x01))
+      print_Error(F("Controller Pak not found"), true);
+    if ((i == 16) && (myByte == 0x04))
+      print_Error(F("CRC Error"), true);
+  }
+}
+
+// read 32bytes from controller pak and calculate CRC
+byte readBlock(word myAddress) {
   // Calculate the address CRC
   word myAddressCRC = addrCRC(myAddress);
 
@@ -1963,6 +2025,11 @@ void readBlock(word myAddress) {
   unsigned char addressHigh[] = {(unsigned char)(myAddressCRC >> 8)};
   unsigned char addressLow[] = {(unsigned char)(myAddressCRC & 0xff)};
 
+  // Empty buffer
+  for (word i = 0; i < 265; i++) {
+    N64_raw_dump[i] = 0xFF;
+  }
+
   // don't want interrupts getting in the way
   noInterrupts();
   // send those 3 bytes
@@ -1970,8 +2037,8 @@ void readBlock(word myAddress) {
   N64_send(addressHigh, 1);
   N64_send(addressLow, 1);
   N64_stop();
-  // read in data
-  N64_get(256);
+  // read in 32 byte data + 1 byte crc
+  N64_get(264);
   // end of time sensitive code
   interrupts();
 
@@ -1999,6 +2066,40 @@ void readBlock(word myAddress) {
     // Save byte into block array
     myBlock[i / 8] = myByte;
   }
+
+  // Get CRC of block send
+  boolean byteFlipped[9];
+  // Flip byte order
+  byteFlipped[0] = N64_raw_dump[256 + 7];
+  byteFlipped[1] = N64_raw_dump[256 + 6];
+  byteFlipped[2] = N64_raw_dump[256 + 5];
+  byteFlipped[3] = N64_raw_dump[256 + 4];
+  byteFlipped[4] = N64_raw_dump[256 + 3];
+  byteFlipped[5] = N64_raw_dump[256 + 2];
+  byteFlipped[6] = N64_raw_dump[256 + 1];
+  byteFlipped[7] = N64_raw_dump[256 + 0];
+
+  unsigned char blockCRC = 0;
+  for (byte k = 0; k < 8; ++k) {
+    if (byteFlipped[k]) {
+      blockCRC |= 1 << k;
+    }
+  }
+
+  // Calculate CRC of block received
+  unsigned char myCRC = dataCRC(&myBlock[0]);
+
+  // Compare
+  if (blockCRC != myCRC) {
+    display_Clear();
+    // Close the file:
+    myFile.close();
+    println_Msg(F("Controller Pak was"));
+    println_Msg(F("not dumped due to a"));
+    print_Error(F("protocol CRC error"), true);
+  }
+
+  return blockCRC;
 }
 
 // reads the MPK file to the sd card
@@ -2019,7 +2120,15 @@ void readMPK() {
   foldern = foldern + 1;
   EEPROM_writeAnything(0, foldern);
 
-  //open file on sd card
+  //open crc file on sd card
+  sprintf(filePath, "%d", foldern - 1);
+  strcat(filePath, ".crc");
+  FsFile crcFile;
+  if (!crcFile.open(filePath, O_RDWR | O_CREAT)) {
+    print_Error(F("Can't open file on SD"), true);
+  }
+
+  //open mpk file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
     print_Error(F("Can't open file on SD"), true);
   }
@@ -2028,31 +2137,31 @@ void readMPK() {
   println_Msg(fileName);
   display_Update();
 
-  //Initialize progress bar
-  uint32_t processedProgressBar = 0;
-  uint32_t totalProgressBar = (uint32_t)(0x7FFF);
-  draw_progressbar(0, totalProgressBar);
-
   // Dummy write because first write to file takes 1 second and messes up timing
   blinkLED();
   myFile.write(0xFF);
   myFile.rewind();
   blinkLED();
 
+  //Initialize progress bar
+  uint32_t processedProgressBar = 0;
+  uint32_t totalProgressBar = (uint32_t)(0x7FFF);
+  draw_progressbar(0, totalProgressBar);
+
   // Controller paks, which all have 32kB of space, are mapped between 0x0000 – 0x7FFF
   // Read 512 byte into sdBuffer
   for (word currSdBuffer = 0x0000; currSdBuffer < 0x8000; currSdBuffer += 512) {
     // Read 32 byte block
     for (word currBlock = 0; currBlock < 512; currBlock += 32) {
-      // Read one block of the Controller Pak into array myBlock
-      readBlock(currSdBuffer + currBlock);
+      // Read one block of the Controller Pak into array myBlock and write CRC of that block to crc file
+      crcFile.write(readBlock(currSdBuffer + currBlock));
 
       // Copy block to SdBuffer
       for (byte currByte = 0; currByte < 32; currByte++) {
         sdBuffer[currBlock + currByte] = myBlock[currByte];
       }
 
-      // Real N64 has about 627us pause between banks, loop takes 500us, add a bit extra delay
+      // Real N64 has about 627us pause between banks, add a bit extra delay
       if (currBlock < 479)
         delayMicroseconds(800);
     }
@@ -2067,6 +2176,64 @@ void readMPK() {
   }
   // Close the file:
   myFile.close();
+  crcFile.close();
+}
+
+// verifies if read was successful
+void verifyCRC() {
+  writeErrors = 0;
+
+  println_Msg(F("Verifying..."));
+  display_Update();
+
+  //open CRC file on sd card
+  FsFile crcFile;
+  if (!crcFile.open(filePath, O_READ)) {
+    print_Error(F("Can't open file on SD"), true);
+  }
+
+  //open MPK file on sd card
+  if (!myFile.open(fileName, O_READ)) {
+    print_Error(F("Can't open file on SD"), true);
+  }
+
+  //Initialize progress bar
+  uint32_t processedProgressBar = 0;
+  uint32_t totalProgressBar = (uint32_t)(0x7FFF);
+  draw_progressbar(0, totalProgressBar);
+
+  // Controller paks, which all have 32kB of space, are mapped between 0x0000 – 0x7FFF
+  for (word currSdBuffer = 0x0000; currSdBuffer < 0x8000; currSdBuffer += 512) {
+    // Read 32 bytes into SD buffer
+    myFile.read(sdBuffer, 512);
+
+    // Compare 32 byte block CRC to CRC from file
+    for (word currBlock = 0; currBlock < 512; currBlock += 32) {
+      // Calculate CRC of block and compare against crc file
+      if (dataCRC(&sdBuffer[currBlock]) != crcFile.read())
+        writeErrors++;
+    }
+
+    // Blink led
+    blinkLED();
+    // Update progress bar
+    processedProgressBar += 512;
+    draw_progressbar(processedProgressBar, totalProgressBar);
+  }
+  // Close the file:
+  myFile.close();
+  crcFile.close();
+
+  if (writeErrors == 0) {
+    println_Msg(F("Read successfully"));
+    display_Update();
+  }
+  else {
+    print_Msg(F("Error: "));
+    print_Msg(writeErrors);
+    println_Msg(F(" blocks "));
+    print_Error(F("did not verify."), false);
+  }
 }
 
 // Calculates the checksum of the header
@@ -2087,12 +2254,8 @@ boolean checkHeader(byte startAddress) {
   }
 }
 
-// verifies if read was successful
-void checksumMPK() {
-  println_Msg(F(""));
-  print_Msg(F("Header..."));
-  display_Update();
-
+// verifies if Controller Pak holds valid header data
+void validateMPK() {
   //open file on sd card
   if (!myFile.open(fileName, O_READ)) {
     print_Error(F("Can't open file"), true);
@@ -2101,17 +2264,24 @@ void checksumMPK() {
   // Read first 256 byte which contains the header including checksum and reverse checksum and three copies of it
   myFile.read(sdBuffer, 256);
 
-  // At least one header copy needs to be ok
-  if ((checkHeader(0x20)) || (checkHeader(0x60)) || (checkHeader(0x80)) || (checkHeader(0xC0)))
-    println_Msg(F("OK"));
-  else
-    println_Msg(F("Error"));
+  //Check all four header copies
+  writeErrors = 0;
+  if (!checkHeader(0x20))
+    writeErrors++;
+  if (!checkHeader(0x60))
+    writeErrors++;
+  if (!checkHeader(0x80))
+    writeErrors++;
+  if (!checkHeader(0xC0))
+    writeErrors++;
+
+  print_Msg(F("HDR: "));
+  print_Msg(4 - writeErrors);
+  print_Msg(F("/4 - "));
   display_Update();
 
   // Check both TOC copies
   writeErrors = 0;
-  print_Msg(F("TOC..."));
-  display_Update();
   word sum = 0;
 
   // Read 2nd and 3rd 256 byte page with TOC info
@@ -2125,15 +2295,12 @@ void checksumMPK() {
     for (int i = 5; i < 128; i++ ) {
       sum += sdBuffer[(i << 1) + 1];
     }
-
     if (sdBuffer[1] != (sum & 0xFF))
       writeErrors++;
   }
-  // Both TOCs damaged
-  if (writeErrors > 1)
-    println_Msg("Error");
-  else
-    println_Msg("OK");
+  print_Msg(F("ToC: "));
+  print_Msg(2 - writeErrors);
+  println_Msg(F("/2"));
   display_Update();
 
   // Close the file:
@@ -2257,7 +2424,7 @@ void verifyMPK() {
   // Close the file:
   myFile.close();
   if (writeErrors == 0) {
-    println_Msg(F("OK"));
+    println_Msg(F("Written successfully"));
     display_Update();
   }
   else {
