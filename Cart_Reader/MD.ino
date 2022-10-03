@@ -1313,7 +1313,11 @@ void readROM_MD() {
   }
 
   // Calculate and compare CRC32 with no-intro
-  compareCRC("md.txt", 0, 1, 0);
+  if (readWord_MD(0x105) == 0x3332)
+    //database, crcString, renamerom, offset
+    compareCRC("32x.txt", 0, 1, 0);
+  else
+    compareCRC("md.txt", 0, 1, 0);
 
   // More checksums
   if (SnKmode >= 2) {
@@ -2448,7 +2452,7 @@ void readRealtec_MD() {
   strcat(fileName, ".MD");
 
   // create a new folder
-  EEPROM_readAnything(10, foldern);
+  EEPROM_readAnything(0, foldern);
   sprintf(folder, "MD/ROM/%s/%d", romName, foldern);
   sd.mkdir(folder, true);
   sd.chdir(folder);
@@ -2461,7 +2465,7 @@ void readRealtec_MD() {
 
   // write new folder number back to eeprom
   foldern = foldern + 1;
-  EEPROM_writeAnything(10, foldern);
+  EEPROM_writeAnything(0, foldern);
 
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
