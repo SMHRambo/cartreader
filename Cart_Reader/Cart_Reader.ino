@@ -67,7 +67,7 @@ char ver[5] = "10.0";
 // Remove // in front of the line with your hardware version
 // #define HW5
 // #define HW4
-// #define HW3
+#define HW3
 // #define HW2
 // #define HW1
 // #define SERIAL_MONITOR
@@ -153,10 +153,10 @@ char ver[5] = "10.0";
 // #define RTC_installed
 
 // Use calibration data from snes_clk.txt
-// #define clockgen_calibration
+#define clockgen_calibration
 
 // Use Adafruit Clock Generator
-// #define clockgen_installed
+#define clockgen_installed
 
 // I don't know
 //#define use_md_conf
