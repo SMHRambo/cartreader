@@ -16,17 +16,12 @@
 // SF Memory status
 byte sfmReady = 0;
 
-// SF Memory Menu
-boolean hasMenu = true;
-byte numGames = 0;
-
 // Arrays that hold game info
-int gameSize[8];
-int saveSize[8];
+// int gameSize[8];
+// int saveSize[8];
 byte gameAddress[8];
-byte gameVersion[8];
-char gameCode[8][10];
-boolean hirom[8];
+// byte gameVersion[8];
+// boolean hirom[8];
 
 /******************************************
   Menu
@@ -34,8 +29,8 @@ boolean hirom[8];
 // SFM menu items
 static const char sfmMenuItem1[] PROGMEM = "Game Menu";
 static const char sfmMenuItem2[] PROGMEM = "Flash Menu";
-static const char sfmMenuItem3[] PROGMEM = "Reset";
-static const char* const menuOptionsSFM[] PROGMEM = {sfmMenuItem1, sfmMenuItem2, sfmMenuItem3};
+//static const char sfmMenuItem3[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsSFM[] PROGMEM = { sfmMenuItem1, sfmMenuItem2, string_reset2 };
 
 // SFM flash menu items
 static const char sfmFlashMenuItem1[] PROGMEM = "Read Flash";
@@ -44,17 +39,18 @@ static const char sfmFlashMenuItem3[] PROGMEM = "Print Mapping";
 static const char sfmFlashMenuItem4[] PROGMEM = "Read Mapping";
 static const char sfmFlashMenuItem5[] PROGMEM = "Write Mapping";
 static const char sfmFlashMenuItem6[] PROGMEM = "Back";
-static const char* const menuOptionsSFMFlash[] PROGMEM = {sfmFlashMenuItem1, sfmFlashMenuItem2, sfmFlashMenuItem3, sfmFlashMenuItem4, sfmFlashMenuItem5, sfmFlashMenuItem6};
+static const char* const menuOptionsSFMFlash[] PROGMEM = { sfmFlashMenuItem1, sfmFlashMenuItem2, sfmFlashMenuItem3, sfmFlashMenuItem4, sfmFlashMenuItem5, sfmFlashMenuItem6 };
 
 // SFM game menu items
 static const char sfmGameMenuItem1[] PROGMEM = "Read Sram";
 static const char sfmGameMenuItem2[] PROGMEM = "Read Game";
 static const char sfmGameMenuItem3[] PROGMEM = "Write Sram";
 static const char sfmGameMenuItem4[] PROGMEM = "Switch Game";
-static const char sfmGameMenuItem5[] PROGMEM = "Reset";
-static const char* const menuOptionsSFMGame[] PROGMEM = {sfmGameMenuItem1, sfmGameMenuItem2, sfmGameMenuItem3, sfmGameMenuItem4, sfmGameMenuItem5};
+//static const char sfmGameMenuItem5[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsSFMGame[] PROGMEM = { sfmGameMenuItem1, sfmGameMenuItem2, sfmGameMenuItem3, sfmGameMenuItem4, string_reset2 };
 
 void sfmMenu() {
+  vselect(false);
   // create menu with title and 3 options to choose from
   unsigned char mainMenu;
   // Copy menuOptions out of progmem
@@ -62,8 +58,7 @@ void sfmMenu() {
   mainMenu = question_box(F("SF Memory"), menuOptions, 3, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (mainMenu)
-  {
+  switch (mainMenu) {
     // Game menu
     case 0:
       sfmGameMenu();
@@ -80,20 +75,17 @@ void sfmMenu() {
 }
 
 void sfmGameMenu() {
+  char menuOptionsSFMGames[8][20];
+  byte numGames;
+  boolean hasMenu;
   // Switch to hirom all
   if (send_SFM(0x04) == 0x2A) {
     delay(300);
 
     // Fill arrays with data
-    getGames();
+    getGames(menuOptionsSFMGames, &hasMenu, &numGames);
 
     if (hasMenu) {
-      // Create submenu options
-      char menuOptionsSFMGames[8][20];
-      for (int i = 0; i < (numGames); i++) {
-        strncpy(menuOptionsSFMGames[i], gameCode[i], 10);
-      }
-
       // Create menu with title and numGames options to choose from
       unsigned char gameSubMenu;
       // wait for user choice to come back from the question box menu
@@ -118,32 +110,30 @@ void sfmGameMenu() {
           println_Msg(F(" Timeout"));
           println_Msg(readBank_SFM(0, 0x2400), HEX);
           println_Msg(F(""));
-          print_Error(F("Powercycle SFM cart"), true);
+          print_FatalError(F("Powercycle SFM cart"));
         }
       }
       // Copy gameCode to romName in case of japanese chars in romName
-      strcpy(romName, gameCode[gameSubMenu + 1]);
+      strcpy(romName, menuOptionsSFMGames[gameSubMenu + 1]);
 
       // Print info
       getCartInfo_SFM();
       mode = mode_SFM_Game;
-    }
-    else {
+    } else {
       // No menu so switch to only game
       // Switch to game
       send_SFM(0x80);
       delay(200);
 
       // Copy gameCode to romName in case of japanese chars in romName
-      strcpy(romName, gameCode[0]);
+      strcpy(romName, menuOptionsSFMGames[0]);
 
       // Print info
       getCartInfo_SFM();
       mode = mode_SFM_Game;
     }
-  }
-  else {
-    print_Error(F("Switch to HiRom failed"), false);
+  } else {
+    print_Error(F("Switch to HiRom failed"));
   }
 }
 
@@ -155,8 +145,7 @@ void sfmGameOptions() {
   gameSubMenu = question_box(F("SFM Game Menu"), menuOptions, 5, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (gameSubMenu)
-  {
+  switch (gameSubMenu) {
     // Read sram
     case 0:
       display_Clear();
@@ -172,6 +161,7 @@ void sfmGameOptions() {
       sd.chdir("/");
       readROM_SFM();
       compare_checksum();
+      compareCRC("snes.txt", 0, 1, 0);
       break;
 
     // Write sram
@@ -185,12 +175,11 @@ void sfmGameOptions() {
       if (wrErrors == 0) {
         println_Msg(F("Verified OK"));
         display_Update();
-      }
-      else {
-        print_Msg(F("Error: "));
+      } else {
+        print_STR(error_STR, 0);
         print_Msg(wrErrors);
-        println_Msg(F(" bytes "));
-        print_Error(F("did not verify."), false);
+        print_STR(_bytes_STR, 1);
+        print_Error(did_not_verify_STR);
       }
       break;
 
@@ -206,7 +195,8 @@ void sfmGameOptions() {
   }
   if (gameSubMenu != 3) {
     println_Msg(F(""));
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     wait();
   }
@@ -221,8 +211,7 @@ void sfmFlashMenu() {
   flashSubMenu = question_box(F("SFM Flash Menu"), menuOptions, 6, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (flashSubMenu)
-  {
+  switch (flashSubMenu) {
     // Read Flash
     case 0:
       // Clear screen
@@ -258,9 +247,8 @@ void sfmFlashMenu() {
 
         // Read flash
         readFlash_SFM();
-      }
-      else {
-        print_Error(F("Switch to HiRom failed"), false);
+      } else {
+        print_Error(F("Switch to HiRom failed"));
       }
       break;
 
@@ -274,7 +262,8 @@ void sfmFlashMenu() {
       println_Msg(F("This will erase your"));
       println_Msg(F("NP Cartridge."));
       println_Msg("");
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
 
@@ -316,9 +305,9 @@ void sfmFlashMenu() {
         println_Msg(F("OK"));
         display_Update();
         idFlash_SFM(0xC0);
-        if (strcmp(flashid, "c2f3") == 0) {
+        if (flashid == 0xc2f3) {
           idFlash_SFM(0xE0);
-          if (strcmp(flashid, "c2f3") == 0) {
+          if (flashid == 0xc2f3) {
             // Reset flash
             resetFlash_SFM(0xC0);
             resetFlash_SFM(0xE0);
@@ -328,17 +317,14 @@ void sfmFlashMenu() {
             printMapping();
             resetFlash_SFM(0xC0);
             resetFlash_SFM(0xE0);
+          } else {
+            print_FatalError(F("Error: Wrong Flash ID"));
           }
-          else {
-            print_Error(F("Error: Wrong Flash ID"), true);
-          }
+        } else {
+          print_FatalError(F("Error: Wrong Flash ID"));
         }
-        else {
-          print_Error(F("Error: Wrong Flash ID"), true);
-        }
-      }
-      else {
-        print_Error(F("failed"), false);
+      } else {
+        print_Error(F("failed"));
       }
       break;
 
@@ -358,9 +344,9 @@ void sfmFlashMenu() {
         println_Msg(F("OK"));
         display_Update();
         idFlash_SFM(0xC0);
-        if (strcmp(flashid, "c2f3") == 0) {
+        if (flashid == 0xc2f3) {
           idFlash_SFM(0xE0);
-          if (strcmp(flashid, "c2f3") == 0) {
+          if (flashid == 0xc2f3) {
             // Reset flash
             resetFlash_SFM(0xC0);
             resetFlash_SFM(0xE0);
@@ -368,17 +354,14 @@ void sfmFlashMenu() {
             readMapping();
             resetFlash_SFM(0xC0);
             resetFlash_SFM(0xE0);
+          } else {
+            print_FatalError(F("Error: Wrong Flash ID"));
           }
-          else {
-            print_Error(F("Error: Wrong Flash ID"), true);
-          }
+        } else {
+          print_FatalError(F("Error: Wrong Flash ID"));
         }
-        else {
-          print_Error(F("Error: Wrong Flash ID"), true);
-        }
-      }
-      else {
-        print_Error(F("failed"), false);
+      } else {
+        print_Error(F("failed"));
       }
       break;
 
@@ -392,7 +375,8 @@ void sfmFlashMenu() {
       println_Msg(F("This will erase your"));
       println_Msg(F("NP Cartridge."));
       println_Msg("");
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
 
@@ -410,8 +394,7 @@ void sfmFlashMenu() {
       if (blankcheckMapping_SFM()) {
         println_Msg(F("OK"));
         display_Update();
-      }
-      else {
+      } else {
         println_Msg(F("Nope"));
         break;
       }
@@ -443,7 +426,8 @@ void sfmFlashMenu() {
   }
   if (flashSubMenu != 5) {
     println_Msg(F(""));
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     wait();
   }
@@ -451,50 +435,50 @@ void sfmFlashMenu() {
 #endif
 
 // Read the games from the menu area
-void getGames() {
+void getGames(char gameCode[8][20], boolean* hasMenu, byte* numGames) {
   // Set data pins to input
   dataIn();
   // Set control pins to input
   controlIn_SFM();
 
   // Check if menu is present
-  byte menuString[] = {0x4D, 0x45, 0x4E, 0x55, 0x20, 0x50, 0x52, 0x4F, 0x47, 0x52, 0x41, 0x4D};
+  *hasMenu = true;
+  byte menuString[] = { 0x4D, 0x45, 0x4E, 0x55, 0x20, 0x50, 0x52, 0x4F, 0x47, 0x52, 0x41, 0x4D };
   for (int i = 0; i < 12; i++) {
     if (menuString[i] != readBank_SFM(0xC0, 0x7FC0 + i)) {
-      hasMenu = false;
+      *hasMenu = false;
     }
   }
 
-  if (hasMenu) {
+  if (*hasMenu) {
+    *numGames = 0;
     // Count number of games
     for (word i = 0x0000; i < 0xE000; i += 0x2000) {
-      if (readBank_SFM(0xC6, i) == numGames )
-        numGames++;
+      if (readBank_SFM(0xC6, i) == *numGames)
+        (*numGames)++;
     }
 
     // Get game info
-    for (int i = 0; i < numGames; i++) {
+    for (int i = 0; i < *numGames; i++) {
       // Read starting address and size
       gameAddress[i] = 0xC0 + readBank_SFM(0xC6, i * 0x2000 + 0x01) * 0x8;
-      gameSize[i] = readBank_SFM(0xC6, i * 0x2000 + 0x03) * 128;
-      saveSize[i] = readBank_SFM(0xC6, i * 0x2000 + 0x05) / 8;
+      // gameSize[i] = readBank_SFM(0xC6, i * 0x2000 + 0x03) * 128;
+      // saveSize[i] = readBank_SFM(0xC6, i * 0x2000 + 0x05) / 8;
 
       //check if hirom
-      if (readBank_SFM(gameAddress[i], 0xFFD5) == 0x31) {
-        hirom[i] = true;
-      }
-      else if (readBank_SFM(gameAddress[i], 0xFFD5) == 0x21) {
-        hirom[i] = true;
-      }
-      else {
-        hirom[i] = false;
-      }
+      // if (readBank_SFM(gameAddress[i], 0xFFD5) == 0x31) {
+      //   hirom[i] = true;
+      // } else if (readBank_SFM(gameAddress[i], 0xFFD5) == 0x21) {
+      //   hirom[i] = true;
+      // } else {
+      //   hirom[i] = false;
+      // }
 
-      if (hirom[i]) {
-        gameVersion[i] = readBank_SFM(gameAddress[i], 0xFFDB);
-      } else {
-        gameVersion[i] = readBank_SFM(gameAddress[i], 0x7FDB);
-      }
+      // if (hirom[i]) {
+      //   gameVersion[i] = readBank_SFM(gameAddress[i], 0xFFDB);
+      // } else {
+      //   gameVersion[i] = readBank_SFM(gameAddress[i], 0x7FDB);
+      // }
 
       // Read game code
       byte myByte = 0;
@@ -502,60 +486,38 @@ void getGames() {
       for (int j = 0; j < 9; j++) {
         myByte = readBank_SFM(0xC6, i * 0x2000 + 0x07 + j);
         // Remove funny characters
-        if (((char(myByte) >= 44 && char(myByte) <= 57) || (char(myByte) >= 65 && char(myByte) <= 122)) && myLength < 9) {
-          gameCode[i][myLength] = char(myByte);
+        if (((myByte >= ',' && myByte <= '9') || (myByte >= 'A' && myByte <= 'z')) && myLength < 9) {
+          gameCode[i][myLength] = myByte;
           myLength++;
         }
       }
       // End char array in case game code is less than 9 chars
       gameCode[i][myLength] = '\0';
     }
-  }
-  else {
+  } else {
+    word base;
+    *numGames = 1;
     //check if hirom
     if (readBank_SFM(0xC0, 0xFFD5) == 0x31) {
-      hirom[0] = true;
-    }
-    else {
-      hirom[0] = false;
+      // hirom[0] = true;
+      base = 0xFF00;
+    } else {
+      // hirom[0] = false;
+      base = 0x7F00;
     }
 
-    if (hirom[0]) {
-      gameVersion[0] = readBank_SFM(0xC0, 0xFFDB);
-      gameCode[0][0] = 'G';
-      gameCode[0][1] = 'A';
-      gameCode[0][2] = 'M';
-      gameCode[0][3] = 'E';
-      gameCode[0][4] = '-';
-      gameCode[0][5] = char(readBank_SFM(0xC0, 0xFFB2));
-      gameCode[0][6] = char(readBank_SFM(0xC0, 0xFFB3));
-      gameCode[0][7] = char(readBank_SFM(0xC0, 0xFFB4));
-      gameCode[0][8] = char(readBank_SFM(0xC0, 0xFFB5));
-      gameCode[0][9] = '\0';
-
-      byte romSizeExp = readBank_SFM(0xC0, 0xFFD7) - 7;
-      gameSize[0] = 1;
-      while (romSizeExp--)
-        gameSize[0] *= 2;
-    }
-    else {
-      gameVersion[0] = readBank_SFM(0xC0, 0x7FDB);
-      gameCode[0][0] = 'G';
-      gameCode[0][1] = 'A';
-      gameCode[0][2] = 'M';
-      gameCode[0][3] = 'E';
-      gameCode[0][4] = '-';
-      gameCode[0][5] = char(readBank_SFM(0xC0, 0x7FB2));
-      gameCode[0][6] = char(readBank_SFM(0xC0, 0x7FB3));
-      gameCode[0][7] = char(readBank_SFM(0xC0, 0x7FB4));
-      gameCode[0][8] = char(readBank_SFM(0xC0, 0x7FB5));
-      gameCode[0][9] = '\0';
-
-      byte romSizeExp = readBank_SFM(0xC0, 0x7FD7) - 7;
-      gameSize[0] = 1;
-      while (romSizeExp--)
-        gameSize[0] *= 2;
-    }
+    // gameVersion[0] = readBank_SFM(0xC0, base + 0xDB);
+    gameCode[0][0] = 'G';
+    gameCode[0][1] = 'A';
+    gameCode[0][2] = 'M';
+    gameCode[0][3] = 'E';
+    gameCode[0][4] = '-';
+    gameCode[0][5] = readBank_SFM(0xC0, base + 0xB2);
+    gameCode[0][6] = readBank_SFM(0xC0, base + 0xB3);
+    gameCode[0][7] = readBank_SFM(0xC0, base + 0xB4);
+    gameCode[0][8] = readBank_SFM(0xC0, base + 0xB5);
+    gameCode[0][9] = '\0';
+    // gameSize[0] = 1 << (readBank_SFM(0xC0, base + 0xD7) - 7);
   }
 }
 
@@ -616,7 +578,7 @@ void setup_SFM() {
 #ifdef clockgen_installed
   else {
     display_Clear();
-    print_Error(F("Clock Generator not found"), true);
+    print_FatalError(F("Clock Generator not found"));
   }
 #endif
 
@@ -638,7 +600,7 @@ void setup_SFM() {
       println_Msg(F("Hirom All Timeout"));
       println_Msg(F(""));
       println_Msg(F(""));
-      print_Error(F("Powercycle SFM cart"), true);
+      print_FatalError(F("Powercycle SFM cart"));
     }
   }
 }
@@ -674,19 +636,56 @@ void writeBank_SFM(byte myBank, word myAddress, byte myData) {
 
   // Arduino running at 16Mhz -> one nop = 62.5ns
   // Wait till output is stable
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Switch WR(PH5) to LOW
   PORTH &= ~(1 << 5);
 
   // Leave WR low for at least 60ns
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Switch WR(PH5) to HIGH
   PORTH |= (1 << 5);
 
   // Leave WR high for at least 50ns
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 }
 
 // Read one byte of data from a location specified by bank and address, 00:0000
@@ -696,7 +695,22 @@ byte readBank_SFM(byte myBank, word myAddress) {
   PORTK = (myAddress >> 8) & 0xFF;
 
   // Arduino running at 16Mhz -> one nop = 62.5ns -> 1000ns total
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Read
   byte tempByte = PINC;
@@ -751,7 +765,8 @@ void getCartInfo_SFM() {
   print_Msg(F("Sram: "));
   print_Msg(sramSize);
   println_Msg(F("Kbit"));
-  println_Msg(F("Press Button..."));
+  // Prints string out of the common strings array either with or without newline
+  print_STR(press_button_STR, 1);
   display_Update();
   // Wait for user input
   wait();
@@ -769,22 +784,17 @@ boolean checkcart_SFM() {
   }
 
   // Calculate CRC32 of header
-  uint32_t oldcrc32 = 0xFFFFFFFF;
-  for (int c = 0; c < 80; c++) {
-    oldcrc32 = updateCRC(snesHeader[c], oldcrc32);
-  }
   char crcStr[9];
-  sprintf(crcStr, "%08lX", ~oldcrc32);
+  sprintf(crcStr, "%08lX", calculateCRC(snesHeader, 80));
 
   // Get Checksum as string
   sprintf(checksumStr, "%02X%02X", readBank_SFM(0, 65503), readBank_SFM(0, 65502));
 
   romType = readBank_SFM(0, 0xFFD5);
   if ((romType >> 5) != 1) {  // Detect invalid romType byte due to too long ROM name (22 chars)
-    romType = 0; // LoROM   // Krusty's Super Fun House (U) 1.0 & Contra 3 (U)
-  }
-  else {
-    romType &= 1; // Must be LoROM or HiROM
+    romType = 0;              // LoROM   // Krusty's Super Fun House (U) 1.0 & Contra 3 (U)
+  } else {
+    romType &= 1;  // Must be LoROM or HiROM
   }
 
   // Check RomSize
@@ -846,8 +856,7 @@ boolean checkcart_SFM() {
     sramSize = 1;
     while (sramSizeExp--)
       sramSize *= 2;
-  }
-  else {
+  } else {
     sramSize = 0;
   }
 
@@ -855,11 +864,10 @@ boolean checkcart_SFM() {
   romVersion = readBank_SFM(0, 65499);
 
   // Test if checksum is equal to reverse checksum
-  if (((word(readBank_SFM(0, 65500)) + (word(readBank_SFM(0, 65501)) * 256)) + (word(readBank_SFM(0, 65502)) + (word(readBank_SFM(0, 65503)) * 256))) == 65535 ) {
+  if (((word(readBank_SFM(0, 65500)) + (word(readBank_SFM(0, 65501)) * 256)) + (word(readBank_SFM(0, 65502)) + (word(readBank_SFM(0, 65503)) * 256))) == 65535) {
     if (strcmp("0000", checksumStr) == 0) {
       return 0;
-    }
-    else {
+    } else {
       return 1;
     }
   }
@@ -887,7 +895,7 @@ void readROM_SFM() {
 
   //clear the screen
   display_Clear();
-  println_Msg(F("Creating folder: "));
+  print_Msg(F("Creating folder "));
   println_Msg(folder);
   display_Update();
 
@@ -897,7 +905,7 @@ void readROM_SFM() {
 
   //open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't create file on SD"), true);
+    print_FatalError(create_file_STR);
   }
 
   // Check if LoROM or HiROM...
@@ -906,7 +914,7 @@ void readROM_SFM() {
     display_Update();
 
     // Read up to 96 banks starting at bank 0×00.
-    for (int currBank = 0; currBank < numBanks; currBank++) {
+    for (word currBank = 0; currBank < numBanks; currBank++) {
       // Dump the bytes to SD 512B at a time
       for (long currByte = 32768; currByte < 65536; currByte += 512) {
         for (int c = 0; c < 512; c++) {
@@ -921,7 +929,7 @@ void readROM_SFM() {
     println_Msg(F("Dumping HiRom..."));
     display_Update();
 
-    for (int currBank = 192; currBank < (numBanks + 192); currBank++) {
+    for (word currBank = 192; currBank < (numBanks + 192); currBank++) {
       for (long currByte = 0; currByte < 65536; currByte += 512) {
         for (int c = 0; c < 512; c++) {
           sdBuffer[c] = readBank_SFM(currBank, currByte + c);
@@ -953,8 +961,7 @@ void resetFlash_SFM(int startBank) {
     writeBank_SFM(startBank, 0x5555L * 2, 0xaa);
     writeBank_SFM(startBank, 0x2AAAL * 2, 0x55);
     writeBank_SFM(startBank, 0x5555L * 2, 0xf0);
-  }
-  else {
+  } else {
     writeBank_SFM(1, 0x8000 + 0x1555L * 2, 0xaa);
     writeBank_SFM(0, 0x8000 + 0x2AAAL * 2, 0x55);
     writeBank_SFM(1, 0x8000 + 0x1555L * 2, 0xf0);
@@ -980,9 +987,10 @@ void idFlash_SFM(int startBank) {
     controlIn_SFM();
 
     // Read the two id bytes into a string
-    sprintf(flashid, "%x%x", readBank_SFM(startBank, 0x00), readBank_SFM(startBank, 0x02));
-  }
-  else {
+    flashid = readBank_SFM(startBank, 0x00) << 8;
+    flashid |= readBank_SFM(startBank, 0x02);
+    sprintf(flashid_str, "%04x", flashid);
+  } else {
     writeBank_SFM(1, 0x8000 + 0x1555L * 2, 0xaa);
     writeBank_SFM(0, 0x8000 + 0x2AAAL * 2, 0x55);
     writeBank_SFM(1, 0x8000 + 0x1555L * 2, 0x90);
@@ -993,7 +1001,9 @@ void idFlash_SFM(int startBank) {
     controlIn_SFM();
 
     // Read the two id bytes into a string
-    sprintf(flashid, "%x%x", readBank_SFM(0, 0x8000), readBank_SFM(0, 0x8000 + 0x02));
+    flashid = readBank_SFM(0, 0x8000) << 8;
+    flashid |= readBank_SFM(0, 0x8000 + 0x02);
+    sprintf(flashid_str, "%04x", flashid);
   }
 }
 
@@ -1001,8 +1011,7 @@ void idFlash_SFM(int startBank) {
 void writeFlash_SFM(int startBank, uint32_t pos) {
   display_Clear();
   print_Msg(F("Writing Bank 0x"));
-  print_Msg(startBank, HEX);
-  print_Msg(F("..."));
+  println_Msg(startBank, HEX);
   display_Update();
 
   // Open file on sd card
@@ -1018,8 +1027,13 @@ void writeFlash_SFM(int startBank, uint32_t pos) {
     dataOut();
 
     if (romType) {
+      //Initialize progress bar
+      uint32_t processedProgressBar = 0;
+      uint32_t totalProgressBar = numBanks * 0x10000;
+      draw_progressbar(0, totalProgressBar);
+
       // Write hirom
-      for (int currBank = startBank; currBank < startBank + numBanks; currBank++) {
+      for (word currBank = startBank; currBank < startBank + numBanks; currBank++) {
         // Fill SDBuffer with 1 page at a time then write it repeat until all bytes are written
         for (unsigned long currByte = 0; currByte < 0x10000; currByte += 128) {
           myFile.read(sdBuffer, 128);
@@ -1041,11 +1055,18 @@ void writeFlash_SFM(int startBank, uint32_t pos) {
           // Wait until write is finished
           busyCheck_SFM(startBank);
         }
+        // update progress bar
+        processedProgressBar += 0x10000;
+        draw_progressbar(processedProgressBar, totalProgressBar);
       }
-    }
-    else {
+    } else {
+      //Initialize progress bar
+      uint32_t processedProgressBar = 0;
+      uint32_t totalProgressBar = numBanks * 0x8000;
+      draw_progressbar(0, totalProgressBar);
+
       // Write lorom
-      for (int currBank = 0; currBank < numBanks; currBank++) {
+      for (word currBank = 0; currBank < numBanks; currBank++) {
         for (unsigned long currByte = 0x8000; currByte < 0x10000; currByte += 128) {
           myFile.read(sdBuffer, 128);
           // Write command sequence
@@ -1065,14 +1086,16 @@ void writeFlash_SFM(int startBank, uint32_t pos) {
           // Wait until write is finished
           busyCheck_SFM(startBank);
         }
+        // update progress bar
+        processedProgressBar += 0x8000;
+        draw_progressbar(processedProgressBar, totalProgressBar);
       }
     }
     // Close the file:
     myFile.close();
     println_Msg("");
-  }
-  else {
-    print_Error(F("Can't open file on SD"), true);
+  } else {
+    print_FatalError(open_file_STR);
   }
 }
 
@@ -1126,8 +1149,7 @@ void eraseFlash_SFM(int startBank) {
     writeBank_SFM(startBank, 0x5555L * 2, 0xaa);
     writeBank_SFM(startBank, 0x2AAAL * 2, 0x55);
     writeBank_SFM(startBank, 0x5555L * 2, 0x10);
-  }
-  else {
+  } else {
     writeBank_SFM(1, 0x8000 + 0x1555L * 2, 0xaa);
     writeBank_SFM(0, 0x8000 + 0x2AAAL * 2, 0x55);
     writeBank_SFM(1, 0x8000 + 0x1555L * 2, 0x80);
@@ -1150,17 +1172,16 @@ byte blankcheck_SFM(int startBank) {
 
   byte blank = 1;
   if (romType) {
-    for (int currBank = startBank; currBank < startBank + numBanks; currBank++) {
+    for (word currBank = startBank; currBank < startBank + numBanks; currBank++) {
       for (unsigned long currByte = 0; currByte < 0x10000; currByte++) {
         if (readBank_SFM(currBank, currByte) != 0xFF) {
-          currBank =  startBank + numBanks;
+          currBank = startBank + numBanks;
           blank = 0;
         }
       }
     }
-  }
-  else {
-    for (int currBank = 0; currBank < numBanks; currBank++) {
+  } else {
+    for (word currBank = 0; currBank < numBanks; currBank++) {
       for (unsigned long currByte = 0x8000; currByte < 0x10000; currByte++) {
         if (readBank_SFM(currBank, currByte) != 0xFF) {
           currBank = numBanks;
@@ -1174,7 +1195,7 @@ byte blankcheck_SFM(int startBank) {
 
 // Check if a write succeeded, returns 0 if all is ok and number of errors if not
 unsigned long verifyFlash_SFM(int startBank, uint32_t pos) {
-  unsigned long  verified = 0;
+  unsigned long verified = 0;
 
   // Open file on sd card
   if (myFile.open(filePath, O_READ)) {
@@ -1188,7 +1209,7 @@ unsigned long verifyFlash_SFM(int startBank, uint32_t pos) {
     controlIn_SFM();
 
     if (romType) {
-      for (int currBank = startBank; currBank < startBank + numBanks; currBank++) {
+      for (word currBank = startBank; currBank < startBank + numBanks; currBank++) {
         for (unsigned long currByte = 0; currByte < 0x10000; currByte += 512) {
           // Fill SDBuffer
           myFile.read(sdBuffer, 512);
@@ -1199,9 +1220,8 @@ unsigned long verifyFlash_SFM(int startBank, uint32_t pos) {
           }
         }
       }
-    }
-    else {
-      for (int currBank = 0; currBank < numBanks; currBank++) {
+    } else {
+      for (word currBank = 0; currBank < numBanks; currBank++) {
         for (unsigned long currByte = 0x8000; currByte < 0x10000; currByte += 512) {
           // Fill SDBuffer
           myFile.read(sdBuffer, 512);
@@ -1215,11 +1235,10 @@ unsigned long verifyFlash_SFM(int startBank, uint32_t pos) {
     }
     // Close the file:
     myFile.close();
-  }
-  else {
+  } else {
     // SD Error
     verified = 999999;
-    print_Error(F("Can't open file on SD"), false);
+    print_Error(F("Can't open file on SD"));
   }
   // Return 0 if verified ok, or number of errors
   return verified;
@@ -1239,10 +1258,10 @@ void readFlash_SFM() {
 
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't create file on SD"), true);
+    print_FatalError(create_file_STR);
   }
   if (romType) {
-    for (int currBank = 0xC0; currBank < 0xC0 + numBanks; currBank++) {
+    for (word currBank = 0xC0; currBank < 0xC0 + numBanks; currBank++) {
       for (unsigned long currByte = 0; currByte < 0x10000; currByte += 512) {
         for (int c = 0; c < 512; c++) {
           sdBuffer[c] = readBank_SFM(currBank, currByte + c);
@@ -1250,9 +1269,8 @@ void readFlash_SFM() {
         myFile.write(sdBuffer, 512);
       }
     }
-  }
-  else {
-    for (int currBank = 0; currBank < numBanks; currBank++) {
+  } else {
+    for (word currBank = 0; currBank < numBanks; currBank++) {
       for (unsigned long currByte = 0x8000; currByte < 0x10000; currByte += 512) {
         for (int c = 0; c < 512; c++) {
           sdBuffer[c] = readBank_SFM(currBank, currByte + c);
@@ -1318,10 +1336,10 @@ void printMapping() {
   // Read the mapping out of the first chip
   char buffer[3];
 
-  for (int currByte = 0xFF00; currByte < 0xFF50; currByte += 10) {
+  for (unsigned int currByte = 0xFF00; currByte < 0xFF50; currByte += 10) {
     for (int c = 0; c < 10; c++) {
-      itoa (readBank_SFM(0xC0, currByte + c), buffer, 16);
-      for (int i = 0; i < 2 - strlen(buffer); i++) {
+      itoa(readBank_SFM(0xC0, currByte + c), buffer, 16);
+      for (size_t i = 0; i < 2 - strlen(buffer); i++) {
         print_Msg(F("0"));
       }
       // Now print the significant bits
@@ -1384,7 +1402,7 @@ void readMapping() {
 
   //open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("SD Error"), true);
+    print_FatalError(sd_error_STR);
   }
 
   // Read the mapping info out of the 1st chip
@@ -1447,7 +1465,7 @@ void eraseMapping(byte startBank) {
   if (unlockHirom()) {
     // Get ID
     idFlash_SFM(startBank);
-    if (strcmp(flashid, "c2f3") == 0) {
+    if (flashid == 0xc2f3) {
       resetFlash_SFM(startBank);
 
       // Switch to write
@@ -1469,13 +1487,11 @@ void eraseMapping(byte startBank) {
       // Switch to read
       dataIn();
       controlIn_SFM();
+    } else {
+      print_FatalError(F("Error: Wrong Flash ID"));
     }
-    else {
-      print_Error(F("Error: Wrong Flash ID"), true);
-    }
-  }
-  else {
-    print_Error(F("Unlock failed"), true);
+  } else {
+    print_FatalError(F("Unlock failed"));
   }
 }
 
@@ -1559,7 +1575,7 @@ void writeMapping_SFM(byte startBank, uint32_t pos) {
   if (unlockHirom()) {
     // Get ID
     idFlash_SFM(startBank);
-    if (strcmp(flashid, "c2f3") == 0) {
+    if (flashid == 0xc2f3) {
       resetFlash_SFM(startBank);
 
       // Switch to write
@@ -1599,21 +1615,18 @@ void writeMapping_SFM(byte startBank, uint32_t pos) {
         // Close the file:
         myFile.close();
         println_Msg("");
-      }
-      else {
-        print_Error(F("Can't open file on SD"), false);
+      } else {
+        print_Error(F("Can't open file on SD"));
       }
 
       // Switch to read
       dataIn();
       controlIn_SFM();
+    } else {
+      print_FatalError(F("Error: Wrong Flash ID"));
     }
-    else {
-      print_Error(F("Error: Wrong Flash ID"), true);
-    }
-  }
-  else {
-    print_Error(F("Unlock failed"), true);
+  } else {
+    print_FatalError(F("Unlock failed"));
   }
 }
 
@@ -1636,14 +1649,12 @@ boolean unlockHirom() {
       println_Msg(F("OK"));
       display_Update();
       return 1;
-    }
-    else {
+    } else {
       println_Msg(F("failed"));
       display_Update();
       return 0;
     }
-  }
-  else {
+  } else {
     println_Msg(F("failed"));
     display_Update();
     return 0;
@@ -1697,9 +1708,9 @@ void write_SFM(int startBank, uint32_t pos) {
   if (unlockHirom()) {
     // Get ID
     idFlash_SFM(startBank);
-    if (strcmp(flashid, "c2f3") == 0) {
+    if (flashid == 0xc2f3) {
       print_Msg(F("Flash ID: "));
-      println_Msg(flashid);
+      println_Msg(flashid_str);
       display_Update();
       resetFlash_SFM(startBank);
       delay(1000);
@@ -1709,23 +1720,21 @@ void write_SFM(int startBank, uint32_t pos) {
       if (blankcheck_SFM(startBank)) {
         println_Msg(F("OK"));
         display_Update();
-      }
-      else {
+      } else {
         println_Msg(F("Nope"));
         display_Clear();
         print_Msg(F("Erasing..."));
         display_Update();
         eraseFlash_SFM(startBank);
         resetFlash_SFM(startBank);
-        println_Msg(F("Done"));
+        print_STR(done_STR, 1);
         print_Msg(F("Blankcheck..."));
         display_Update();
         if (blankcheck_SFM(startBank)) {
           println_Msg(F("OK"));
           display_Update();
-        }
-        else {
-          print_Error(F("Could not erase flash"), true);
+        } else {
+          print_FatalError(F("Could not erase flash"));
         }
       }
       // Write flash
@@ -1735,26 +1744,23 @@ void write_SFM(int startBank, uint32_t pos) {
       resetFlash_SFM(startBank);
 
       // Checking for errors
-      print_Msg(F("Verifying..."));
+      print_STR(verifying_STR, 0);
       display_Update();
       writeErrors = verifyFlash_SFM(startBank, pos);
       if (writeErrors == 0) {
         println_Msg(F("OK"));
         display_Update();
-      }
-      else {
-        print_Msg(F("Error: "));
+      } else {
+        print_STR(error_STR, 0);
         print_Msg(writeErrors);
-        println_Msg(F(" bytes "));
-        print_Error(F("did not verify."), true);
+        print_STR(_bytes_STR, 1);
+        print_FatalError(did_not_verify_STR);
       }
+    } else {
+      print_FatalError(F("Error: Wrong Flash ID"));
     }
-    else {
-      print_Error(F("Error: Wrong Flash ID"), true);
-    }
-  }
-  else {
-    print_Error(F("Unlock failed"), true);
+  } else {
+    print_FatalError(F("Unlock failed"));
   }
 }
 

@@ -38,9 +38,9 @@
 // /WR - (PH5)
 // /RD - (PH6)
 
-word WSV[] = {32, 64, 512};
-byte wsvlo = 0; // Lowest Entry
-byte wsvhi = 2; // Highest Entry
+const word WSV[] PROGMEM = { 32, 64, 512 };
+byte wsvlo = 0;  // Lowest Entry
+byte wsvhi = 2;  // Highest Entry
 
 byte wsvsize;
 byte newwsvsize;
@@ -52,8 +52,7 @@ byte newwsvsize;
 // SETUP
 //******************************************
 
-void setup_WSV()
-{
+void setup_WSV() {
   // Set Address Pins to Output
   //A0-A7
   DDRF = 0xFF;
@@ -87,7 +86,7 @@ void setup_WSV()
   // Set Unused Pins HIGH
   PORTL = 0xE0;
   PORTA = 0xFF;
-  PORTJ |= (1 << 0); // TIME(PJ0)
+  PORTJ |= (1 << 0);  // TIME(PJ0)
 
   checkStatus_WSV();
   strcpy(romName, "SUPERVISION");
@@ -103,16 +102,15 @@ void setup_WSV()
 static const char wsvMenuItem1[] PROGMEM = "Select Cart";
 static const char wsvMenuItem2[] PROGMEM = "Read ROM";
 static const char wsvMenuItem3[] PROGMEM = "Set Size";
-static const char wsvMenuItem4[] PROGMEM = "Reset";
-static const char* const menuOptionsSV[] PROGMEM = {wsvMenuItem1, wsvMenuItem2, wsvMenuItem3, wsvMenuItem4};
+//static const char wsvMenuItem4[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsSV[] PROGMEM = { wsvMenuItem1, wsvMenuItem2, wsvMenuItem3, string_reset2 };
 
-void wsvMenu()
-{
+void wsvMenu() {
+  vselect(false);
   convertPgm(menuOptionsSV, 4);
   uint8_t mainMenu = question_box(F("SUPERVISION MENU"), menuOptions, 4, 0);
 
-  switch (mainMenu)
-  {
+  switch (mainMenu) {
     case 0:
       // Select Cart
       setCart_WSV();
@@ -157,25 +155,27 @@ void controlIn_WSV() {
   PORTH &= ~(1 << 6);
 }
 
-void dataIn_WSV()
-{
+void dataIn_WSV() {
   DDRC = 0x00;
 }
 
-void dataOut_WSV()
-{
+void dataOut_WSV() {
   DDRC = 0xFF;
 }
 
-uint8_t readByte_WSV(uint32_t addr)
-{
+uint8_t readByte_WSV(uint32_t addr) {
   PORTF = addr & 0xFF;
   PORTK = (addr >> 8) & 0xFF;
   PORTL = (addr >> 16) & 0xFF;
 
   // Wait for data bus
   // 6 x 62.5ns = 375ns
-  NOP; NOP; NOP; NOP; NOP; NOP;
+  NOP;
+  NOP;
+  NOP;
+  NOP;
+  NOP;
+  NOP;
 
   uint8_t ret = PINC;
   NOP;
@@ -187,8 +187,7 @@ uint8_t readByte_WSV(uint32_t addr)
 // READ CODE
 //******************************************
 
-void readROM_WSV()
-{
+void readROM_WSV() {
   strcpy(fileName, romName);
   strcat(fileName, ".sv");
 
@@ -200,14 +199,14 @@ void readROM_WSV()
   sd.chdir(folder);
 
   display_Clear();
-  print_Msg(F("Saving to "));
+  print_STR(saving_to_STR, 0);
   print_Msg(folder);
   println_Msg(F("/..."));
   display_Update();
 
   // open file on sdcard
   if (!myFile.open(fileName, O_RDWR | O_CREAT))
-    print_Error(F("Can't create file on SD"), true);
+    print_FatalError(create_file_STR);
 
   // write new folder number back to EEPROM
   foldern++;
@@ -217,14 +216,13 @@ void readROM_WSV()
   dataIn_WSV();
   controlIn_WSV();
 
-  romSize = WSV[wsvsize];
+  romSize = pgm_read_word(&(WSV[wsvsize]));
 
   uint32_t romStart = 0;
   if (romSize < 64)
     romStart = 0x8000;
   uint32_t romEnd = (uint32_t)romSize * 0x400;
-  for (uint32_t addr = 0; addr < romEnd; addr += 512)
-  {
+  for (uint32_t addr = 0; addr < romEnd; addr += 512) {
     for (uint16_t w = 0; w < 512; w++)
       sdBuffer[w] = readByte_WSV(romStart + addr + w);
     myFile.write(sdBuffer, 512);
@@ -236,7 +234,8 @@ void readROM_WSV()
   compareCRC("wsv.txt", 0, 1, 0);
 
   println_Msg(F(""));
-  println_Msg(F("Press Button..."));
+  // Prints string out of the common strings array either with or without newline
+  print_STR(press_button_STR, 1);
   display_Update();
   wait();
 }
@@ -245,8 +244,7 @@ void readROM_WSV()
 // ROM SIZE
 //******************************************
 
-void setROMSize_WSV()
-{
+void setROMSize_WSV() {
 #if (defined(enable_OLED) || defined(enable_LCD))
   display_Clear();
   if (wsvlo == wsvhi)
@@ -257,20 +255,20 @@ void setROMSize_WSV()
 
     display_Clear();
     print_Msg(F("ROM Size: "));
-    println_Msg(WSV[i]);
+    println_Msg(pgm_read_word(&(WSV[i])));
     println_Msg(F(""));
 #if defined(enable_OLED)
-    println_Msg(F("Press left to Change"));
-    println_Msg(F("and right to Select"));
+    print_STR(press_to_change_STR, 1);
+    print_STR(right_to_select_STR, 1);
 #elif defined(enable_LCD)
-    println_Msg(F("Rotate to Change"));
-    println_Msg(F("Press to Select"));
+    print_STR(rotate_to_change_STR, 1);
+    print_STR(press_to_select_STR, 1);
 #endif
     display_Update();
 
     while (1) {
       b = checkButton();
-      if (b == 2) { // Previous (doubleclick)
+      if (b == 2) {  // Previous (doubleclick)
         if (i == wsvlo)
           i = wsvhi;
         else
@@ -279,18 +277,18 @@ void setROMSize_WSV()
         // Only update display after input because of slow LCD library
         display_Clear();
         print_Msg(F("ROM Size: "));
-        println_Msg(WSV[i]);
+        println_Msg(pgm_read_word(&(WSV[i])));
         println_Msg(F(""));
 #if defined(enable_OLED)
-        println_Msg(F("Press left to Change"));
-        println_Msg(F("and right to Select"));
+        print_STR(press_to_change_STR, 1);
+        print_STR(right_to_select_STR, 1);
 #elif defined(enable_LCD)
-        println_Msg(F("Rotate to Change"));
-        println_Msg(F("Press to Select"));
+        print_STR(rotate_to_change_STR, 1);
+        print_STR(press_to_select_STR, 1);
 #endif
         display_Update();
       }
-      if (b == 1) { // Next (press)
+      if (b == 1) {  // Next (press)
         if (i == wsvhi)
           i = wsvlo;
         else
@@ -299,26 +297,26 @@ void setROMSize_WSV()
         // Only update display after input because of slow LCD library
         display_Clear();
         print_Msg(F("ROM Size: "));
-        println_Msg(WSV[i]);
+        println_Msg(pgm_read_word(&(WSV[i])));
         println_Msg(F(""));
 #if defined(enable_OLED)
-        println_Msg(F("Press left to Change"));
-        println_Msg(F("and right to Select"));
+        print_STR(press_to_change_STR, 1);
+        print_STR(right_to_select_STR, 1);
 #elif defined(enable_LCD)
-        println_Msg(F("Rotate to Change"));
-        println_Msg(F("Press to Select"));
+        print_STR(rotate_to_change_STR, 1);
+        print_STR(press_to_select_STR, 1);
 #endif
         display_Update();
       }
-      if (b == 3) { // Long Press - Execute (hold)
+      if (b == 3) {  // Long Press - Execute (hold)
         newwsvsize = i;
         break;
       }
     }
-    display.setCursor(0, 56); // Display selection at bottom
+    display.setCursor(0, 56);  // Display selection at bottom
   }
   print_Msg(F("ROM SIZE "));
-  print_Msg(WSV[newwsvsize]);
+  print_Msg(pgm_read_word(&(WSV[newwsvsize])));
   println_Msg(F("K"));
   display_Update();
   delay(1000);
@@ -332,7 +330,7 @@ setrom:
       Serial.print(F("Select ROM Size:  "));
       Serial.print(i);
       Serial.print(F(" = "));
-      Serial.print(WSV[i + wsvlo]);
+      Serial.print(pgm_read_word(&(WSV[i + wsvlo])));
       Serial.println(F("K"));
     }
     Serial.print(F("Enter ROM Size: "));
@@ -347,18 +345,17 @@ setrom:
     }
   }
   Serial.print(F("ROM Size = "));
-  Serial.print(WSV[newwsvsize]);
+  Serial.print(pgm_read_word(&(WSV[newwsvsize])));
   Serial.println(F("K"));
 #endif
   EEPROM_writeAnything(8, newwsvsize);
   wsvsize = newwsvsize;
 }
 
-void checkStatus_WSV()
-{
+void checkStatus_WSV() {
   EEPROM_readAnything(8, wsvsize);
   if (wsvsize > 2) {
-    wsvsize = 1; // default 64K
+    wsvsize = 1;  // default 64K
     EEPROM_writeAnything(8, wsvsize);
   }
 
@@ -368,13 +365,13 @@ void checkStatus_WSV()
   println_Msg(F("CURRENT SETTINGS"));
   println_Msg(F(""));
   print_Msg(F("ROM SIZE: "));
-  print_Msg(WSV[wsvsize]);
+  print_Msg(pgm_read_word(&(WSV[wsvsize])));
   println_Msg(F("K"));
   display_Update();
   wait();
 #else
   Serial.print(F("CURRENT ROM SIZE: "));
-  Serial.print(WSV[wsvsize]);
+  Serial.print(pgm_read_word(&(WSV[wsvsize])));
   Serial.println(F("K"));
   Serial.println(F(""));
 #endif
@@ -412,22 +409,7 @@ void setCart_WSV() {
       }
 
       // Rewind one line
-      for (byte count_newline = 0; count_newline < 2; count_newline++) {
-        while (1) {
-          if (myFile.curPosition() == 0) {
-            break;
-          }
-          else if (myFile.peek() == '\n') {
-            myFile.seekSet(myFile.curPosition() - 1);
-            break;
-          }
-          else {
-            myFile.seekSet(myFile.curPosition() - 1);
-          }
-        }
-      }
-      if (myFile.curPosition() != 0)
-        myFile.seekSet(myFile.curPosition() + 2);
+      rewind_line(myFile);
     }
 
     // Display database
@@ -435,11 +417,7 @@ void setCart_WSV() {
       display_Clear();
 
       // Read game name
-#if defined(enable_OLED)
-      get_line(gamename, &myFile, 42);
-#else
       get_line(gamename, &myFile, 96);
-#endif
 
       // Read CRC32 checksum
       sprintf(checksumStr, "%c", myFile.read());
@@ -449,7 +427,7 @@ void setCart_WSV() {
       }
 
       // Skip over semicolon
-      myFile.seekSet(myFile.curPosition() + 1);
+      myFile.seekCur(1);
 
       // Read CRC32 of first 512 bytes
       sprintf(crc_search, "%c", myFile.read());
@@ -459,7 +437,7 @@ void setCart_WSV() {
       }
 
       // Skip over semicolon
-      myFile.seekSet(myFile.curPosition() + 1);
+      myFile.seekCur(1);
 
       // Read rom size
       // Read the next ascii character and subtract 48 to convert to decimal
@@ -467,14 +445,13 @@ void setCart_WSV() {
 
       // Remove leading 0 for single digit cart sizes
       if (cartSize != 0) {
-        cartSize = cartSize * 10 +  myFile.read() - 48;
-      }
-      else {
+        cartSize = cartSize * 10 + myFile.read() - 48;
+      } else {
         cartSize = myFile.read() - 48;
       }
 
       // Skip rest of line
-      myFile.seekSet(myFile.curPosition() + 2);
+      myFile.seekCur(2);
 
       // Skip every 3rd line
       skip_line(&myFile);
@@ -490,11 +467,11 @@ void setCart_WSV() {
       println_Msg(F("KB"));
       println_Msg(F(""));
 #if defined(enable_OLED)
-      println_Msg(F("Press left to Change"));
-      println_Msg(F("and right to Select"));
+      print_STR(press_to_change_STR, 1);
+      print_STR(right_to_select_STR, 1);
 #elif defined(enable_LCD)
-      println_Msg(F("Rotate to Change"));
-      println_Msg(F("Press to Select"));
+      print_STR(rotate_to_change_STR, 1);
+      print_STR(press_to_select_STR, 1);
 #elif defined(SERIAL_MONITOR)
       println_Msg(F("U/D to Change"));
       println_Msg(F("Space to Select"));
@@ -513,22 +490,7 @@ void setCart_WSV() {
 
         // Previous
         else if (b == 2) {
-          for (byte count_newline = 0; count_newline < 7; count_newline++) {
-            while (1) {
-              if (myFile.curPosition() == 0) {
-                break;
-              }
-              else if (myFile.peek() == '\n') {
-                myFile.seekSet(myFile.curPosition() - 1);
-                break;
-              }
-              else {
-                myFile.seekSet(myFile.curPosition() - 1);
-              }
-            }
-          }
-          if (myFile.curPosition() != 0)
-            myFile.seekSet(myFile.curPosition() + 2);
+          rewind_line(myFile, 6);
           break;
         }
 
@@ -554,9 +516,8 @@ void setCart_WSV() {
         }
       }
     }
-  }
-  else {
-    print_Error(F("Database file not found"), true);
+  } else {
+    print_FatalError(F("Database file not found"));
   }
 }
 #endif

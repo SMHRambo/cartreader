@@ -18,20 +18,13 @@
    Variables
  *****************************************/
 // Received N64 Eeprom data bits, 1 page
-bool tempBits[65];
 int eepPages;
 
 // N64 Controller
-// 256 bits of received Controller data + 8 bit CRC
-char N64_raw_dump[265];
-// Array that holds one Controller Pak block of 32 bytes data
-byte myBlock[33];
-String rawStr = ""; // above char array read into a string
 struct {
   char stick_x;
   char stick_y;
-}
-N64_status;
+} N64_status;
 //stings that hold the buttons
 String button = "N/A";
 String lastbutton = "N/A";
@@ -51,6 +44,9 @@ String CRC1 = "";
 String CRC2 = "";
 #endif
 
+static const char N64_EEP_FILENAME_FMT[] PROGMEM = "%s.eep";
+static const char N64_SAVE_DIRNAME_FMT[] PROGMEM = "N64/SAVE/%s/%d";
+
 /******************************************
   Menu
 *****************************************/
@@ -59,30 +55,30 @@ static const char n64MenuItem1[] PROGMEM = "Game Cartridge";
 static const char n64MenuItem2[] PROGMEM = "Controller";
 static const char n64MenuItem3[] PROGMEM = "Flash Repro";
 static const char n64MenuItem4[] PROGMEM = "Flash Gameshark";
-static const char n64MenuItem5[] PROGMEM = "Reset";
-static const char* const menuOptionsN64[] PROGMEM = {n64MenuItem1, n64MenuItem2, n64MenuItem3, n64MenuItem4, n64MenuItem5};
+//static const char n64MenuItem5[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsN64[] PROGMEM = { n64MenuItem1, n64MenuItem2, n64MenuItem3, n64MenuItem4, string_reset2 };
 
 // N64 controller menu items
 static const char N64ContMenuItem1[] PROGMEM = "Test Controller";
 static const char N64ContMenuItem2[] PROGMEM = "Read ControllerPak";
 static const char N64ContMenuItem3[] PROGMEM = "Write ControllerPak";
-static const char N64ContMenuItem4[] PROGMEM = "Reset";
-static const char* const menuOptionsN64Controller[] PROGMEM = {N64ContMenuItem1, N64ContMenuItem2, N64ContMenuItem3, N64ContMenuItem4};
+//static const char N64ContMenuItem4[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsN64Controller[] PROGMEM = { N64ContMenuItem1, N64ContMenuItem2, N64ContMenuItem3, string_reset2 };
 
 // N64 cart menu items
 static const char N64CartMenuItem1[] PROGMEM = "Read ROM";
 static const char N64CartMenuItem2[] PROGMEM = "Read Save";
 static const char N64CartMenuItem3[] PROGMEM = "Write Save";
 static const char N64CartMenuItem4[] PROGMEM = "Force Savetype";
-static const char N64CartMenuItem5[] PROGMEM = "Reset";
-static const char* const menuOptionsN64Cart[] PROGMEM = {N64CartMenuItem1, N64CartMenuItem2, N64CartMenuItem3, N64CartMenuItem4, N64CartMenuItem5};
+//static const char N64CartMenuItem5[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsN64Cart[] PROGMEM = { N64CartMenuItem1, N64CartMenuItem2, N64CartMenuItem3, N64CartMenuItem4, string_reset2 };
 
 // N64 CRC32 error menu items
 static const char N64CRCMenuItem1[] PROGMEM = "No";
 static const char N64CRCMenuItem2[] PROGMEM = "Yes and keep old";
 static const char N64CRCMenuItem3[] PROGMEM = "Yes and delete old";
-static const char N64CRCMenuItem4[] PROGMEM = "Reset";
-static const char* const menuOptionsN64CRC[] PROGMEM = {N64CRCMenuItem1, N64CRCMenuItem2, N64CRCMenuItem3, N64CRCMenuItem4};
+//static const char N64CRCMenuItem4[] PROGMEM = "Reset"; (stored in common strings array)
+static const char* const menuOptionsN64CRC[] PROGMEM = { N64CRCMenuItem1, N64CRCMenuItem2, N64CRCMenuItem3, string_reset2 };
 
 // Rom menu
 static const char N64RomItem1[] PROGMEM = "4 MB";
@@ -91,7 +87,7 @@ static const char N64RomItem3[] PROGMEM = "12 MB";
 static const char N64RomItem4[] PROGMEM = "16 MB";
 static const char N64RomItem5[] PROGMEM = "32 MB";
 static const char N64RomItem6[] PROGMEM = "64 MB";
-static const char* const romOptionsN64[] PROGMEM = {N64RomItem1, N64RomItem2, N64RomItem3, N64RomItem4, N64RomItem5, N64RomItem6};
+static const char* const romOptionsN64[] PROGMEM = { N64RomItem1, N64RomItem2, N64RomItem3, N64RomItem4, N64RomItem5, N64RomItem6 };
 
 // Save menu
 static const char N64SaveItem1[] PROGMEM = "None";
@@ -99,24 +95,25 @@ static const char N64SaveItem2[] PROGMEM = "4K EEPROM";
 static const char N64SaveItem3[] PROGMEM = "16K EEPROM";
 static const char N64SaveItem4[] PROGMEM = "SRAM";
 static const char N64SaveItem5[] PROGMEM = "FLASH";
-static const char* const saveOptionsN64[] PROGMEM = {N64SaveItem1, N64SaveItem2, N64SaveItem3, N64SaveItem4, N64SaveItem5};
+static const char* const saveOptionsN64[] PROGMEM = { N64SaveItem1, N64SaveItem2, N64SaveItem3, N64SaveItem4, N64SaveItem5 };
 
 // Repro write buffer menu
 static const char N64BufferItem1[] PROGMEM = "No buffer";
 static const char N64BufferItem2[] PROGMEM = "32 Byte";
 static const char N64BufferItem3[] PROGMEM = "64 Byte";
 static const char N64BufferItem4[] PROGMEM = "128 Byte";
-static const char* const bufferOptionsN64[] PROGMEM = {N64BufferItem1, N64BufferItem2, N64BufferItem3, N64BufferItem4};
+static const char* const bufferOptionsN64[] PROGMEM = { N64BufferItem1, N64BufferItem2, N64BufferItem3, N64BufferItem4 };
 
 // Repro sector size menu
 static const char N64SectorItem1[] PROGMEM = "8 KB";
 static const char N64SectorItem2[] PROGMEM = "32 KB";
 static const char N64SectorItem3[] PROGMEM = "64 KB";
 static const char N64SectorItem4[] PROGMEM = "128 KB";
-static const char* const sectorOptionsN64[] PROGMEM = {N64SectorItem1, N64SectorItem2, N64SectorItem3, N64SectorItem4};
+static const char* const sectorOptionsN64[] PROGMEM = { N64SectorItem1, N64SectorItem2, N64SectorItem3, N64SectorItem4 };
 
 // N64 start menu
 void n64Menu() {
+  vselect(true);
   // create menu with title and 5 options to choose from
   unsigned char n64Dev;
   // Copy menuOptions out of progmem
@@ -124,8 +121,7 @@ void n64Menu() {
   n64Dev = question_box(F("Select N64 device"), menuOptions, 5, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (n64Dev)
-  {
+  switch (n64Dev) {
     case 0:
       display_Clear();
       display_Update();
@@ -174,16 +170,13 @@ void n64ControllerMenu() {
   mainMenu = question_box(F("N64 Controller"), menuOptions, 4, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (mainMenu)
-  {
+  switch (mainMenu) {
     case 0:
       resetController();
       display_Clear();
       display_Update();
-#if defined(enable_OLED)
-      controllerTest_OLED();
-#elif defined(enable_LCD)
-      controllerTest_LCD();
+#if (defined(enable_OLED) || defined(enable_LCD))
+      controllerTest_Display();
 #elif defined(enable_serial)
       controllerTest_Serial();
 #endif
@@ -199,7 +192,8 @@ void n64ControllerMenu() {
       verifyCRC();
       validateMPK();
       println_Msg(F(""));
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
       break;
@@ -220,7 +214,8 @@ void n64ControllerMenu() {
       delay(500);
       verifyMPK();
       println_Msg(F(""));
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
       break;
@@ -240,8 +235,7 @@ void n64CartMenu() {
   mainMenu = question_box(F("N64 Cart Reader"), menuOptions, 5, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (mainMenu)
-  {
+  switch (mainMenu) {
     case 0:
       sd.chdir("/");
       readRom_N64();
@@ -255,27 +249,21 @@ void n64CartMenu() {
         println_Msg(F("Reading SRAM..."));
         display_Update();
         readSram(32768, 1);
-      }
-      else  if (saveType == 4) {
+      } else if (saveType == 4) {
         getFramType();
         println_Msg(F("Reading FLASH..."));
         display_Update();
         readFram(flashramType);
-      }
-      else if ((saveType == 5) || (saveType == 6)) {
+      } else if ((saveType == 5) || (saveType == 6)) {
         println_Msg(F("Reading EEPROM..."));
         display_Update();
-#ifdef clockgen_installed
         readEeprom();
-#else
-        readEeprom_CLK();
-#endif
-      }
-      else {
-        print_Error(F("Savetype Error"), false);
+      } else {
+        print_Error(F("Savetype Error"));
       }
       println_Msg(F(""));
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
       break;
@@ -293,64 +281,54 @@ void n64CartMenu() {
         if (writeErrors == 0) {
           println_Msg(F("SRAM verified OK"));
           display_Update();
-        }
-        else {
-          print_Msg(F("Error: "));
+        } else {
+          print_STR(error_STR, 0);
           print_Msg(writeErrors);
-          println_Msg(F(" bytes "));
-          print_Error(F("did not verify."), false);
+          print_STR(_bytes_STR, 1);
+          print_Error(did_not_verify_STR);
         }
-      }
-      else if (saveType == 4) {
+      } else if (saveType == 4) {
         // Launch file browser
         fileBrowser(F("Select fla file"));
         display_Clear();
         getFramType();
         writeFram(flashramType);
-        print_Msg(F("Verifying..."));
+        print_STR(verifying_STR, 0);
         display_Update();
         writeErrors = verifyFram(flashramType);
         if (writeErrors == 0) {
           println_Msg(F("OK"));
           display_Update();
-        }
-        else {
+        } else {
           println_Msg("");
-          print_Msg(F("Error: "));
+          print_STR(error_STR, 0);
           print_Msg(writeErrors);
-          println_Msg(F(" bytes "));
-          print_Error(F("did not verify."), false);
+          print_STR(_bytes_STR, 1);
+          print_Error(did_not_verify_STR);
         }
-      }
-      else if ((saveType == 5) || (saveType == 6)) {
+      } else if ((saveType == 5) || (saveType == 6)) {
         // Launch file browser
         fileBrowser(F("Select eep file"));
         display_Clear();
 
-#ifdef clockgen_installed
         writeEeprom();
         writeErrors = verifyEeprom();
-#else
-        writeEeprom_CLK();
-        writeErrors = verifyEeprom_CLK();
-#endif
 
         if (writeErrors == 0) {
           println_Msg(F("EEPROM verified OK"));
           display_Update();
-        }
-        else {
-          print_Msg(F("Error: "));
+        } else {
+          print_STR(error_STR, 0);
           print_Msg(writeErrors);
-          println_Msg(F(" bytes "));
-          print_Error(F("did not verify."), false);
+          print_STR(_bytes_STR, 1);
+          print_Error(did_not_verify_STR);
         }
-      }
-      else {
+      } else {
         display_Clear();
-        print_Error(F("Save Type Error"), false);
+        print_Error(F("Save Type Error"));
       }
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
       break;
@@ -363,8 +341,7 @@ void n64CartMenu() {
       N64SaveMenu = question_box(F("Select save type"), menuOptions, 5, 0);
 
       // wait for user choice to come back from the question box menu
-      switch (N64SaveMenu)
-      {
+      switch (N64SaveMenu) {
         case 0:
           // None
           saveType = 0;
@@ -437,14 +414,14 @@ void setup_N64_Cart() {
 
   if (!i2c_found) {
     display_Clear();
-    print_Error(F("Clock Generator not found"), true);
+    print_FatalError(F("Clock Generator not found"));
   }
 
   // Set Eeprom clock to 2Mhz
   clockgen.set_freq(200000000ULL, SI5351_CLK1);
 
   // Start outputting Eeprom clock
-  clockgen.output_enable(SI5351_CLK1, 1); // Eeprom clock
+  clockgen.output_enable(SI5351_CLK1, 1);  // Eeprom clock
 
 #else
   // Set Eeprom Clock Pin(PH1) to Output
@@ -527,13 +504,23 @@ void setAddress_N64(unsigned long myAddress) {
   PORTK = (myAdrLowOut >> 8) & 0xFF;
 
   // Leave ale_L high for ~125ns
-  __asm__("nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t");
 
   // Pull ale_L(PC0) low
   PORTC &= ~(1 << 0);
 
   // Wait ~600ns just to be sure address is set
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Set data pins to input
   adIn_N64();
@@ -545,10 +532,14 @@ word readWord_N64() {
   PORTH &= ~(1 << 6);
 
   // Wait ~310ns
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Join bytes from PINF and PINK into a word
-  word tempWord = ( ( PINK & 0xFF ) << 8 ) | ( PINF & 0xFF );
+  word tempWord = ((PINK & 0xFF) << 8) | (PINF & 0xFF);
 
   // Pull read(PH6) high
   PORTH |= (1 << 6);
@@ -574,13 +565,18 @@ void writeWord_N64(word myWord) {
   PORTH &= ~(1 << 5);
 
   // Wait ~310ns
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Pull write(PH5) high
   PORTH |= (1 << 5);
 
   // Wait ~125ns
-  __asm__("nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t");
 
   // Set data pins to input
   adIn_N64();
@@ -590,35 +586,25 @@ void writeWord_N64(word myWord) {
    N64 Controller CRC Functions
  *****************************************/
 static word addrCRC(word address) {
-  // CRC table
-  word xor_table[16] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x15, 0x1F, 0x0B, 0x16, 0x19, 0x07, 0x0E, 0x1C, 0x0D, 0x1A, 0x01 };
-  word crc = 0;
-  // Make sure we have a valid address
-  address &= ~0x1F;
-  // Go through each bit in the address, and if set, xor the right value into the output
-  for (int i = 15; i >= 5; i--) {
-    // Is this bit set?
-    if ( ((address >> i) & 0x1)) {
-      crc ^= xor_table[i];
+  const char n64_address_crc_table[] = { 0x15, 0x1F, 0x0B, 0x16, 0x19, 0x07, 0x0E, 0x1C, 0x0D, 0x1A, 0x01 };
+  const char* cur_xor = n64_address_crc_table;
+  byte crc = 0;
+  for (word mask = 0x0020; mask; mask <<= 1, cur_xor++) {
+    if (address & mask) {
+      crc ^= *cur_xor;
     }
   }
-  // Just in case
-  crc &= 0x1F;
-  // Create a new address with the CRC appended
-  return address | crc;
+  return (address & 0xFFE0) | crc;
 }
 
-static uint8_t dataCRC( uint8_t *data ) {
+static uint8_t dataCRC(uint8_t* data) {
   uint8_t ret = 0;
-  for ( int i = 0; i <= 32; i++ ) {
-    for ( int j = 7; j >= 0; j-- ) {
-      int tmp = 0;
-      if ( ret & 0x80 ) {
-        tmp = 0x85;
-      }
+  for (uint8_t i = 0; i <= 32; i++) {
+    for (uint8_t mask = 0x80; mask; mask >>= 1) {
+      uint8_t tmp = ret & 0x80 ? 0x85 : 0;
       ret <<= 1;
-      if ( i < 32 ) {
-        if ( data[i] & (0x01 << j) ) {
+      if (i < 32) {
+        if (data[i] & mask) {
           ret |= 0x1;
         }
       }
@@ -628,284 +614,355 @@ static uint8_t dataCRC( uint8_t *data ) {
   return ret;
 }
 
+// Macro producing a delay loop waiting an number of cycles multiple of 3, with
+// a range of 3 to 768 cycles (187.5ns to 48us). It takes 6 bytes to do so
+// (3 instructions) making it the same size as the equivalent 3-cycles NOP
+// delay. For shorter delays or non-multiple-of-3-cycle delays, add your own
+// NOPs.
+#define N64_DELAY_LOOP(cycle_count) \
+  do { \
+    byte i; \
+    __asm__ __volatile__("\n" \
+                         "\tldi %[i], %[loop_count]\n" \
+                         ".delay_loop_%=:\n" \
+                         "\tdec %[i]\n" \
+                         "\tbrne .delay_loop_%=\n" \
+                         : [i] "=r"(i) \
+                         : [loop_count] "i"(cycle_count / 3) \
+                         : "cc"); \
+  } while (0)
+
 /******************************************
    N64 Controller Protocol Functions
  *****************************************/
-void N64_send(unsigned char *buffer, char length) {
-  // Send these bytes
-  char bits;
+void sendJoyBus(const byte* buffer, char length) {
+  // Implemented in assembly as there is very little wiggle room, timing-wise.
+  // Overall structure:
+  //   outer_loop:
+  //     mask = 0x80
+  //     cur_byte = *(buffer++)
+  //   inner_loop:
+  //     falling edge
+  //     if (cur_byte & mask) {
+  //       wait 1us starting at the falling edge
+  //       rising edge
+  //       wait 2us starting at the rising edge
+  //     } else {
+  //       wait 3us starting at the falling edge
+  //       rising edge
+  //     }
+  //   inner_common_codepath:
+  //     mask >>= 1
+  //     if (mask == 0)
+  //       goto outer_loop_trailer
+  //     wait +1us from the rising edge
+  //     goto inner_loop
+  //   outer_loop_trailer:
+  //     length -= 1
+  //     if (length == 0)
+  //       goto stop_bit
+  //     wait +1us from the rising edge
+  //     goto outer_loop
+  //   stop_bit:
+  //     wait +1us from the rising edge
+  //     falling edge
+  //     wait 1us from the falling edge
+  //     rising edge
 
-  // This routine is very carefully timed by examining the assembly output.
-  // Do not change any statements, it could throw the timings off
-  //
-  // We get 16 cycles per microsecond, which should be plenty, but we need to
-  // be conservative. Most assembly ops take 1 cycle, but a few take 2
-  //
-  // I use manually constructed for-loops out of gotos so I have more control
-  // over the outputted assembly. I can insert nops where it was impossible
-  // with a for loop
+  byte mask, cur_byte, scratch;
+  // Note on DDRH: retrieve the current DDRH value, and pre-compute the values
+  // to write in order to drive the line high or low. This saves 3 cycles per
+  // transition: sts (2 cycles) instead of lds, or/and, sts (2 + 1 + 2 cycles).
+  // This means that no other code may run in parallel, but this function anyway
+  // requires interrupts to be disabled in order to work in the expected amount
+  // of time.
+  const byte line_low = DDRH | 0x10;
+  const byte line_high = line_low & 0xef;
+  __asm__ __volatile__("\n"
+                       ".outer_loop_%=:\n"
+                       // mask = 0x80
+                       "\tldi  %[mask], 0x80\n"  // 1
+                       // load byte to send from memory
+                       "\tld   %[cur_byte], Z+\n"  // 2
+                       ".inner_loop_%=:\n"
+                       // Falling edge
+                       "\tsts  %[out_byte], %[line_low]\n"  // 2
+                       // Test cur_byte & mask, without clobbering either
+                       "\tmov  %[scratch], %[cur_byte]\n"  // 1
+                       "\tand  %[scratch], %[mask]\n"      // 1
+                       "\tbreq .bit_is_0_%=\n"             // bit is 1: 1, bit is 0: 2
 
-  asm volatile (";Starting outer for loop");
-outer_loop:
-  {
-    asm volatile (";Starting inner for loop");
-    bits = 8;
-inner_loop:
-    {
-      // Starting a bit, set the line low
-      asm volatile (";Setting line to low");
-      N64_LOW; // 1 op, 2 cycles
+                       // bit is a 1
+                       // Stay low for 1us (16 cycles).
+                       // Time before: 3 cycles (mov, and, breq-false).
+                       // Time after: sts (2 cycles).
+                       // So 11 to go, so 3 3-cycles iterations and 2 nop.
+                       "\tldi  %[scratch], 3\n"  // 1
+                       ".delay_1_low_%=:\n"
+                       "\tdec  %[scratch]\n"       // 1
+                       "\tbrne .delay_1_low_%=\n"  // exit: 1, loop: 2
+                       "\tnop\n"                   // 1
+                       "\tnop\n"                   // 1
+                       // Rising edge
+                       "\tsts  %[out_byte], %[line_high]\n"  // 2
+                       // Wait for 2us (32 cycles) to sync with the bot_is_0 codepath.
+                       // Time before: 0 cycles.
+                       // Time after: 2 cycles (rjmp).
+                       // So 30 to go, so 10 3-cycles iterations and 0 nop.
+                       "\tldi  %[scratch], 10\n"  // 1
+                       ".delay_1_high_%=:\n"
+                       "\tdec  %[scratch]\n"             // 1
+                       "\tbrne .delay_1_high_%=\n"       // exit: 1, loop: 2
+                       "\trjmp .inner_common_path_%=\n"  // 2
 
-      asm volatile (";branching");
-      if (*buffer >> 7) {
-        asm volatile (";Bit is a 1");
-        // 1 bit
-        // remain low for 1us, then go high for 3us
-        // nop block 1
-        asm volatile ("nop\nnop\nnop\nnop\nnop\n");
+                       ".bit_is_0_%=:\n"
+                       // bit is a 0
+                       // Stay high for 3us (48 cycles).
+                       // Time before: 4 cycles (mov, and, breq-true).
+                       // Time after: 2 cycles (sts).
+                       // So 42 to go, so 14 3-cycles iterations, and 0 nop.
+                       "\tldi  %[scratch], 14\n"  // 1
+                       ".delay_0_low_%=:\n"
+                       "\tdec  %[scratch]\n"       // 1
+                       "\tbrne .delay_0_low_%=\n"  // exit: 1, loop: 2
+                       // Rising edge
+                       "\tsts  %[out_byte], %[line_high]\n"  // 2
 
-        asm volatile (";Setting line to high");
-        N64_HIGH;
+                       // codepath common to both possible values
+                       ".inner_common_path_%=:\n"
+                       "\tnop\n"                          // 1
+                       "\tlsr  %[mask]\n"                 // 1
+                       "\tbreq .outer_loop_trailer_%=\n"  // mask!=0: 1, mask==0: 2
+                       // Stay high for 1us (16 cycles).
+                       // Time before: 3 cycles (nop, lsr, breq-false).
+                       // Time after: 4 cycles (rjmp, sts)
+                       // So 9 to go, so 3 3-cycles iterations and 0 nop.
+                       "\tldi  %[scratch], 3\n"  // 1
+                       ".delay_common_high_%=:\n"
+                       "\tdec  %[scratch]\n"             // 1
+                       "\tbrne .delay_common_high_%=\n"  // exit: 1, loop: 2
+                       "\trjmp .inner_loop_%=\n"         // 2
 
-        // nop block 2
-        // we'll wait only 2us to sync up with both conditions
-        // at the bottom of the if statement
-        asm volatile ("nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                     );
-
-      }
-      else {
-        asm volatile (";Bit is a 0");
-        // 0 bit
-        // remain low for 3us, then go high for 1us
-        // nop block 3
-        asm volatile ("nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\nnop\n"
-                      "nop\n");
-
-        asm volatile (";Setting line to high");
-        N64_HIGH;
-
-        // wait for 1us
-        asm volatile ("; end of conditional branch, need to wait 1us more before next bit");
-
-      }
-      // end of the if, the line is high and needs to remain
-      // high for exactly 16 more cycles, regardless of the previous
-      // branch path
-
-      asm volatile (";finishing inner loop body");
-      --bits;
-      if (bits != 0) {
-        // nop block 4
-        // this block is why a for loop was impossible
-        asm volatile ("nop\nnop\nnop\nnop\nnop\n"
-                      "nop\nnop\nnop\nnop\n");
-        // rotate bits
-        asm volatile (";rotating out bits");
-        *buffer <<= 1;
-
-        goto inner_loop;
-      } // fall out of inner loop
-    }
-    asm volatile (";continuing outer loop");
-    // In this case: the inner loop exits and the outer loop iterates,
-    // there are /exactly/ 16 cycles taken up by the necessary operations.
-    // So no nops are needed here (that was lucky!)
-    --length;
-    if (length != 0) {
-      ++buffer;
-      goto outer_loop;
-    } // fall out of outer loop
-  }
+                       ".outer_loop_trailer_%=:\n"
+                       "\tdec %[length]\n"      // 1
+                       "\tbreq .stop_bit_%=\n"  // length!=0: 1, length==0: 2
+                       // Stay high for 1us (16 cycles).
+                       // Time before: 6 cycles (lsr, nop, breq-true, dec, breq-false).
+                       // Time after: 7 cycles (rjmp, ldi, ld, sts).
+                       // So 3 to go, so 3 nop (for simplicity).
+                       "\tnop\n"                  // 1
+                       "\tnop\n"                  // 1
+                       "\tnop\n"                  // 1
+                       "\trjmp .outer_loop_%=\n"  // 2
+                       // Done sending data, send a stop bit.
+                       ".stop_bit_%=:\n"
+                       // Stay high for 1us (16 cycles).
+                       // Time before: 7 cycles (lsr, nop, breq-true, dec, breq-true).
+                       // Time after: 2 cycles (sts).
+                       // So 7 to go, so 2 3-cycles iterations and 1 nop.
+                       "\tldi  %[scratch], 2\n"  // 1
+                       ".delay_stop_high_%=:\n"
+                       "\tdec  %[scratch]\n"           // 1
+                       "\tbrne .delay_stop_high_%=\n"  // exit: 1, loop: 2
+                       "\tnop\n"
+                       "\tsts  %[out_byte], %[line_low]\n"  // 2
+                       // Stay low for 1us (16 cycles).
+                       // Time before: 0 cycles.
+                       // Time after: 2 cycles (sts).
+                       // So 14 to go, so 4 3-cycles iterations and 2 nop.
+                       "\tldi  %[scratch], 5\n"  // 1
+                       ".delay_stop_low_%=:\n"
+                       "\tdec  %[scratch]\n"          // 1
+                       "\tbrne .delay_stop_low_%=\n"  // exit: 1, loop: 2
+                       "\tnop\n"
+                       "\tnop\n"
+                       "\tsts  %[out_byte], %[line_high]\n"  // 2
+                       // Notes on arguments:
+                       // - mask and scratch are used wth "ldi", which can only work on registers
+                       //   16 to 31, so tag these with "a" rather than the generic "r"
+                       // - mark all output-only arguments as early-clobber ("&"), as input
+                       //   registers are used throughout all iterations and both sets must be
+                       //   strictly distinct
+                       // - tag buffer with "z", to use the "ld r?, Z+" instruction (load from
+                       //   16bits RAM address and postincrement, in 2 cycles).
+                       //   XXX: any pointer register pair would do, but mapping to Z explicitly
+                       //   because I cannot find a way to get one of "X", "Y" or "Z" to appear
+                       //   when expanding "%[buffer]", causing the assembler to reject the
+                       //   instruction. Pick Z as it is the only call-used such register,
+                       //   avoiding the need to preserve any value a caller may have set it to.
+                       : [buffer] "+z"(buffer),
+                         [length] "+r"(length),
+                         [cur_byte] "=&r"(cur_byte),
+                         [mask] "=&a"(mask),
+                         [scratch] "=&a"(scratch)
+                       : [line_low] "r"(line_low),
+                         [line_high] "r"(line_high),
+                         [out_byte] "i"(&DDRH)
+                       : "cc", "memory");
 }
 
-void N64_stop() {
-  // send a single stop (1) bit
-  // nop block 5
-  asm volatile ("nop\nnop\nnop\nnop\n");
-  N64_LOW;
-  // wait 1 us, 16 cycles, then raise the line
-  // 16-2=14
-  // nop block 6
-  asm volatile ("nop\nnop\nnop\nnop\nnop\n"
-                "nop\nnop\nnop\nnop\nnop\n"
-                "nop\nnop\nnop\nnop\n");
-  N64_HIGH;
-}
+word recvJoyBus(byte* output, byte byte_count) {
+  // listen for expected byte_count bytes of data back from the controller
+  // return the number of bytes not (fully) received if the delay for a signal
+  // edge takes too long.
 
-void N64_get(word bitcount) {
-  // listen for the expected bitcount/8 bytes of data back from the controller and
-  // blast it out to the N64_raw_dump array, one bit per byte for extra speed.
-  asm volatile (";Starting to listen");
-  unsigned char timeout;
-  char *bitbin = N64_raw_dump;
+  // Implemented in assembly as there is very little wiggle room, timing-wise.
+  // Overall structure:
+  //     mask = 0x80
+  //     cur_byte = 0
+  //   read_loop:
+  //     wait for falling edge
+  //     wait for a bit more than 1us
+  //     if input:
+  //       cur_byte |= mask
+  //     mask >>= 1
+  //     if (mask == 0)
+  //       if (--byte_count == 0)
+  //         goto read_end
+  //       append cur_byte to output
+  //       mask = 0x80
+  //       cur_byte = 0
+  //     wait for data high
+  //     goto read_loop
+  //   read_end:
+  //     return byte_count
 
-  // Again, using gotos here to make the assembly more predictable and
-  // optimization easier (please don't kill me)
-read_loop:
-  timeout = 0x3f;
-  // wait for line to go low
-  while (N64_QUERY) {
-    if (!--timeout)
-      return;
-  }
-  // wait approx 2us and poll the line
-  asm volatile (
-    "nop\nnop\nnop\nnop\nnop\n"
-    "nop\nnop\nnop\nnop\nnop\n"
-    "nop\nnop\nnop\nnop\nnop\n"
-    "nop\nnop\nnop\nnop\nnop\n"
-    "nop\nnop\nnop\nnop\nnop\n"
-    "nop\nnop\nnop\nnop\nnop\n"
-  );
-  *bitbin = N64_QUERY;
-  ++bitbin;
-  --bitcount;
-  if (bitcount == 0)
-    return;
+  byte mask, cur_byte, timeout, scratch;
+  __asm__ __volatile__("\n"
+                       "\tldi  %[mask], 0x80\n"
+                       "\tclr  %[cur_byte]\n"
+                       ".read_loop_%=:\n"
+                       // Wait for input to be low. Time out if it takes more than ~27us (~7 bits
+                       // worth of time) for it to go low.
+                       // Takes 5 cycles to exit on input-low iteration (lds, sbrs-false, rjmp).
+                       // Takes 7 cycles to loop on input-high iteration (lds, sbrs-true, dec,
+                       //  brne-true).
+                       "\tldi  %[timeout], 0x3f\n"  // 1
+                       ".read_wait_falling_edge_%=:\n"
+                       "\tlds  %[scratch], %[in_byte]\n"      // 2
+                       "\tsbrs %[scratch], %[in_bit]\n"       // low: 1, high: 2
+                       "\trjmp .read_input_low_%=\n"          // 2
+                       "\tdec  %[timeout]\n"                  // 1
+                       "\tbrne .read_wait_falling_edge_%=\n"  // timeout==0: 1, timeout!=0: 2
+                       "\trjmp .read_end_%=\n"                // 2
 
-  // wait for line to go high again
-  // it may already be high, so this should just drop through
-  timeout = 0x3f;
-  while (!N64_QUERY) {
-    if (!--timeout)
-      return;
-  }
-  goto read_loop;
+                       ".read_input_low_%=:\n"
+                       // Wait for 1500 us (24 cycles) before reading input.
+                       // As it takes from 5 to 7 cycles for the prevous loop to exit,
+                       // this means this loop exits from 1812.5us to 1937.5us after the falling
+                       // edge, so at least 812.5us after a 1-bit rising edge, and at least
+                       // 1062.5us before a 0-bit rising edge.
+                       // This also leaves us with up to 2062.5us (33 cycles) to update cur_byte,
+                       // possibly moving on to the next byte, waiting for a high input, and
+                       // waiting for the next falling edge.
+                       // Time taken until waiting for input high for non-last byte:
+                       // - shift to current byte:
+                       //   - 1: 4 cycles (lds, sbrc-false, or)
+                       //   - 0: 4 cycles (lds, sbrc-true)
+                       // - byte done: 8 cycles (lsr, brne-false, st, dec, brne-false, ldi, clr)
+                       // - byte not done: 3 cycles (lsr, brne-true)
+                       // Total: 7 to 12 cycles, so there are at least 21 cycles left until the
+                       // next bit.
+                       "\tldi  %[timeout], 8\n"  // 1
+                       ".read_wait_low_%=:\n"
+                       "\tdec  %[timeout]\n"         // 1
+                       "\tbrne .read_wait_low_%=\n"  // timeout=0: 1, timeout!=0: 2
+
+                       // Sample input
+                       "\tlds  %[scratch], %[in_byte]\n"  // 2
+                       // Add to cur_byte
+                       "\tsbrc %[scratch], %[in_bit]\n"  // high: 1, low: 2
+                       "\tor   %[cur_byte], %[mask]\n"   // 1
+                       // Shift mask
+                       "\tlsr  %[mask]\n"
+                       "\tbrne .read_wait_input_high_init_%=\n"  // mask==0: 1, mask!=0: 2
+                       // A wole byte was read, store in output
+                       "\tst   Z+, %[cur_byte]\n"  // 2
+                       // Decrement byte count
+                       "\tdec  %[byte_count]\n"  // 1
+                       // Are we done reading ?
+                       "\tbreq .read_end_%=\n"  // byte_count!=0: 1, byte_count==0: 2
+                       // No, prepare for reading another
+                       "\tldi  %[mask], 0x80\n"
+                       "\tclr  %[cur_byte]\n"
+
+                       // Wait for rising edge
+                       ".read_wait_input_high_init_%=:"
+                       "\tldi  %[timeout], 0x3f\n"  // 1
+                       ".read_wait_input_high_%=:\n"
+                       "\tlds  %[scratch], %[in_byte]\n"    // 2
+                       "\tsbrc %[scratch], %[in_bit]\n"     // high: 1, low: 2
+                       "\trjmp .read_loop_%=\n"             // 2
+                       "\tdec  %[timeout]\n"                // 1
+                       "\tbrne .read_wait_input_high_%=\n"  // timeout==0: 1, timeout!=0: 2
+                       "\trjmp .read_end_%=\n"              // 2
+                       ".read_end_%=:\n"
+                       : [output] "+z"(output),
+                         [byte_count] "+r"(byte_count),
+                         [mask] "=&a"(mask),
+                         [cur_byte] "=&r"(cur_byte),
+                         [timeout] "=&a"(timeout),
+                         [scratch] "=&a"(scratch)
+                       : [in_byte] "i"(&PINH),
+                         [in_bit] "i"(4)
+                       : "cc", "memory");
+  return byte_count;
 }
 
 /******************************************
    N64 Controller Functions
  *****************************************/
-void get_button()
-{
+void get_button() {
   // Command to send to the gamecube
   // The last bit is rumble, flip it to rumble
-  // yes this does need to be inside the loop, the
-  // array gets mutilated when it goes through N64_send
-  unsigned char command[] = {
-    0x01
-  };
-
-  // Empty buffer
-  for (word i = 0; i < 265; i++) {
-    N64_raw_dump[i] = 0xFF;
-  }
+  const byte command[] = { 0x01 };
+  byte response[4];
 
   // don't want interrupts getting in the way
   noInterrupts();
-  // send those 3 bytes
-  N64_send(command, 1);
-  N64_stop();
-  // read in 32bits of data and dump it to N64_raw_dump
-  N64_get(32);
+  sendJoyBus(command, sizeof(command));
+  recvJoyBus(response, sizeof(response));
   // end of time sensitive code
   interrupts();
 
-  // The get_N64_status function sloppily dumps its data 1 bit per byte
-  // into the get_status_extended char array. It's our job to go through
-  // that and put each piece neatly into the struct N64_status
-  int i;
-  memset(&N64_status, 0, sizeof(N64_status));
-
-  // bits: joystick x value
   // These are 8 bit values centered at 0x80 (128)
-  for (i = 0; i < 8; i++) {
-    N64_status.stick_x |= N64_raw_dump[16 + i] ? (0x80 >> i) : 0;
-  }
-  for (i = 0; i < 8; i++) {
-    N64_status.stick_y |= N64_raw_dump[24 + i] ? (0x80 >> i) : 0;
-  }
-
-  // read char array N64_raw_dump into string rawStr
-  rawStr = "";
-  for (i = 0; i < 16; i++) {
-    rawStr = rawStr + String(N64_raw_dump[i], DEC);
-  }
+  N64_status.stick_x = response[2];
+  N64_status.stick_y = response[3];
 
   // Buttons (A,B,Z,S,DU,DD,DL,DR,0,0,L,R,CU,CD,CL,CR)
-  if (rawStr.substring(0, 16) == "0000000000000000") {
+  if (response[0] & 0x80)
+    button = F("A");
+  else if (response[0] & 0x40)
+    button = F("B");
+  else if (response[0] & 0x20)
+    button = F("Z");
+  else if (response[0] & 0x10)
+    button = F("START");
+  else if (response[0] & 0x08)
+    button = F("D-Up");
+  else if (response[0] & 0x04)
+    button = F("D-Down");
+  else if (response[0] & 0x02)
+    button = F("D-Left");
+  else if (response[0] & 0x01)
+    button = F("D-Right");
+  //else if (response[1] & 0x80)
+  //else if (response[1] & 0x40)
+  else if (response[1] & 0x20)
+    button = F("L");
+  else if (response[1] & 0x10)
+    button = F("R");
+  else if (response[1] & 0x08)
+    button = F("C-Up");
+  else if (response[1] & 0x04)
+    button = F("C-Down");
+  else if (response[1] & 0x02)
+    button = F("C-Left");
+  else if (response[1] & 0x01)
+    button = F("C-Right");
+  else {
     lastbutton = button;
     button = F("Press a button");
-  }
-  else
-  {
-    for (int i = 0; i < 16; i++)
-    {
-      // seems to be 16, 8 or 4 depending on what pin is used
-      if (N64_raw_dump[i] == 16)
-      {
-        switch (i)
-        {
-          case 7:
-            button = F("D-Right");
-            break;
-
-          case 6:
-            button = F("D-Left");
-            break;
-
-          case 5:
-            button = F("D-Down");
-            break;
-
-          case 4:
-            button = F("D-Up");
-            break;
-
-          case 3:
-            button = F("START");
-            break;
-
-          case 2:
-            button = F("Z");
-            break;
-
-          case 1:
-            button = F("B");
-            break;
-
-          case 0:
-            button = F("A");
-            break;
-
-          case 15:
-            button = F("C-Right");
-            break;
-
-          case 14:
-            button = F("C-Left");
-            break;
-
-          case 13:
-            button = F("C-Down");
-            break;
-
-          case 12:
-            button = F("C-Up");
-            break;
-
-          case 11:
-            button = F("R");
-            break;
-
-          case 10:
-            button = F("L");
-            break;
-        }
-      }
-    }
   }
 }
 
@@ -940,14 +997,13 @@ void controllerTest_Serial() {
 }
 #endif
 
-#ifdef enable_LCD
+#if (defined(enable_LCD) || defined(enable_OLED))
 #define CENTER 64
 // on which screens do we start
 int startscreen = 1;
 int test = 1;
 
-void printSTR(String st, int x, int y)
-{
+void printSTR(String st, int x, int y) {
   char buf[st.length() + 1];
 
   if (x == CENTER) {
@@ -958,39 +1014,33 @@ void printSTR(String st, int x, int y)
   display.drawStr(x, y, buf);
 }
 
-void nextscreen()
-{
-  if (button == "Press a button" && lastbutton == "START")
-  {
+void nextscreen() {
+  if (button == "Press a button" && lastbutton == "START") {
     // reset button
     lastbutton = "N/A";
 
     display.clearDisplay();
     if (startscreen != 4)
       startscreen = startscreen + 1;
-    else
-    {
+    else {
       startscreen = 1;
       test = 1;
     }
-  }
-  else if (button == "Press a button" && lastbutton == "Z" && startscreen == 4)
-  {
+  } else if (button == "Press a button" && lastbutton == "Z" && startscreen == 4) {
     // Quit
     quit = 0;
   }
 }
 
-void controllerTest_LCD() {
+void controllerTest_Display() {
   int mode = 0;
 
   //name of the current displayed result
   String anastick = "";
 
   // Graph
-  int xax = 24; // midpoint x
-  int yax = 24; // midpoint y
-  int zax = 24; // size
+  int xax = 24;  // midpoint x
+  int yax = 24;  // midpoint y
 
   // variables to display test data of different sticks
   int upx = 0;
@@ -1030,29 +1080,54 @@ void controllerTest_LCD() {
   int results = 0;
   int prevStickX = 0;
 
+  String stickx;
+  String sticky;
+  String stickx_old;
+  String sticky_old;
+  String button_old;
+
   while (quit) {
     // Get Button and analog stick
     get_button();
 
-    switch (startscreen)
-    {
+    switch (startscreen) {
       case 1:
         {
-          delay(20);
-          display.clearDisplay();
           display.drawStr(32, 8, "Controller Test");
           display.drawLine(0, 10, 128, 10);
 
-          // Print Button
+          // Delete old button value
+          if (button_old != button) {
+            display.setDrawColor(0);
+            for (byte y = 13; y < 22; y++) {
+              display.drawLine(0, y, 128, y);
+            }
+            display.setDrawColor(1);
+          }
+          // Print button
           printSTR("       " + button + "       ", CENTER, 20);
+          // Save value
+          button_old = button;
 
-          // Print Stick X Value
-          String stickx = String("X: " + String(N64_status.stick_x, DEC) + "   ");
+          // Update stick values
+          stickx = String("X: " + String(N64_status.stick_x, DEC) + "   ");
+          sticky = String("Y: " + String(N64_status.stick_y, DEC) + "   ");
+
+          // Delete old stick values
+          if ((stickx_old != stickx) || (sticky_old != sticky)) {
+            display.setDrawColor(0);
+            for (byte y = 31; y < 38; y++) {
+              display.drawLine(0, y, 128, y);
+            }
+            display.setDrawColor(1);
+          }
+
+          // Print stick values
           printSTR(stickx, 36, 38);
-
-          // Print Stick Y Value
-          String sticky = String("Y: " + String(N64_status.stick_y, DEC) + "   ");
           printSTR(sticky, 74, 38);
+          // Save values
+          stickx_old = stickx;
+          sticky_old = sticky;
 
           printSTR("(Continue with START)", 16, 55);
 
@@ -1068,8 +1143,7 @@ void controllerTest_LCD() {
           display.drawStr(36, 8, "Range Test");
           display.drawLine(0, 9, 128, 9);
 
-          if (mode == 0)
-          {
+          if (mode == 0) {
             // Print Stick X Value
             String stickx = String("X:" + String(N64_status.stick_x, DEC) + "   ");
             printSTR(stickx, 22 + 54, 26);
@@ -1093,31 +1167,23 @@ void controllerTest_LCD() {
           display.drawPixel(10 + xax - 68 / 4, 12 + yax + 68 / 4);
 
           //Draw Analog Stick
-          if (mode == 1)
-          {
+          if (mode == 1) {
             display.drawPixel(10 + xax + N64_status.stick_x / 4, 12 + yax - N64_status.stick_y / 4);
             //Update LCD
             display.updateDisplay();
-          }
-          else
-          {
+          } else {
             display.drawCircle(10 + xax + N64_status.stick_x / 4, 12 + yax - N64_status.stick_y / 4, 2);
             //Update LCD
             display.updateDisplay();
-            delay(20);
-            display.clearDisplay();
+            display_Clear_Slow();
           }
 
           // switch mode
-          if (button == "Press a button" && lastbutton == "Z")
-          {
-            if (mode == 0)
-            {
+          if (button == "Press a button" && lastbutton == "Z") {
+            if (mode == 0) {
               mode = 1;
               display.clearDisplay();
-            }
-            else
-            {
+            } else {
               mode = 0;
               display.clearDisplay();
             }
@@ -1145,8 +1211,7 @@ void controllerTest_LCD() {
           //Update LCD
           display.updateDisplay();
 
-          if (button == "Press a button" && lastbutton == "Z")
-          {
+          if (button == "Press a button" && lastbutton == "Z") {
             // reset button
             lastbutton = "N/A";
 
@@ -1158,15 +1223,13 @@ void controllerTest_LCD() {
         }
       case 4:
         {
-          switch ( test )
-          {
+          switch (test) {
             case 0:  // Display results
               {
-                switch (results)
-                {
+                switch (results) {
                   case 0:
                     {
-                      anastick = "YOURS";
+                      anastick = "Your Stick";
                       upx = bupx;
                       upy = bupy;
                       uprightx = buprightx;
@@ -1184,18 +1247,42 @@ void controllerTest_LCD() {
                       upleftx = bupleftx;
                       uplefty = buplefty;
 
-                      if (button == "Press a button" && lastbutton == "A")
-                      {
+                      if (button == "Press a button" && lastbutton == "A") {
                         // reset button
                         lastbutton = "N/A";
                         results = 1;
+                        display.clearDisplay();
+                        break;
                       }
+                      printSTR(anastick, 22 + 50, 15);
 
+                      display.drawStr(22 + 50, 25, "U:");
+                      printSTR(String(upy), 100, 25);
+                      display.drawStr(22 + 50, 35, "D:");
+                      printSTR(String(downy), 100, 35);
+                      display.drawStr(22 + 50, 45, "L:");
+                      printSTR(String(leftx), 100, 45);
+                      display.drawStr(22 + 50, 55, "R:");
+                      printSTR(String(rightx), 100, 55);
+
+                      display.drawLine(xax + upx / 4, yax - upy / 4, xax + uprightx / 4, yax - uprighty / 4);
+                      display.drawLine(xax + uprightx / 4, yax - uprighty / 4, xax + rightx / 4, yax - righty / 4);
+                      display.drawLine(xax + rightx / 4, yax - righty / 4, xax + downrightx / 4, yax - downrighty / 4);
+                      display.drawLine(xax + downrightx / 4, yax - downrighty / 4, xax + downx / 4, yax - downy / 4);
+                      display.drawLine(xax + downx / 4, yax - downy / 4, xax + downleftx / 4, yax - downlefty / 4);
+                      display.drawLine(xax + downleftx / 4, yax - downlefty / 4, xax + leftx / 4, yax - lefty / 4);
+                      display.drawLine(xax + leftx / 4, yax - lefty / 4, xax + upleftx / 4, yax - uplefty / 4);
+                      display.drawLine(xax + upleftx / 4, yax - uplefty / 4, xax + upx / 4, yax - upy / 4);
+
+                      display.drawPixel(xax, yax);
+
+                      //Update LCD
+                      display.updateDisplay();
                       break;
                     }
                   case 1:
                     {
-                      anastick = "ORIG";
+                      anastick = "Original";
                       upx = 1;
                       upy = 84;
                       uprightx = 67;
@@ -1213,54 +1300,51 @@ void controllerTest_LCD() {
                       upleftx = -68;
                       uplefty = 68;
 
-                      if (button == "Press a button" && lastbutton == "A")
-                      {
+                      if (button == "Press a button" && lastbutton == "A") {
                         // reset button
                         lastbutton = "N/A";
                         results = 0;
+                        display.clearDisplay();
+                        break;
                       }
+                      printSTR(anastick, 22 + 50, 15);
+
+                      display.drawStr(22 + 50, 25, "U:");
+                      printSTR(String(upy), 100, 25);
+                      display.drawStr(22 + 50, 35, "D:");
+                      printSTR(String(downy), 100, 35);
+                      display.drawStr(22 + 50, 45, "L:");
+                      printSTR(String(leftx), 100, 45);
+                      display.drawStr(22 + 50, 55, "R:");
+                      printSTR(String(rightx), 100, 55);
+
+                      display.drawLine(xax + upx / 4, yax - upy / 4, xax + uprightx / 4, yax - uprighty / 4);
+                      display.drawLine(xax + uprightx / 4, yax - uprighty / 4, xax + rightx / 4, yax - righty / 4);
+                      display.drawLine(xax + rightx / 4, yax - righty / 4, xax + downrightx / 4, yax - downrighty / 4);
+                      display.drawLine(xax + downrightx / 4, yax - downrighty / 4, xax + downx / 4, yax - downy / 4);
+                      display.drawLine(xax + downx / 4, yax - downy / 4, xax + downleftx / 4, yax - downlefty / 4);
+                      display.drawLine(xax + downleftx / 4, yax - downlefty / 4, xax + leftx / 4, yax - lefty / 4);
+                      display.drawLine(xax + leftx / 4, yax - lefty / 4, xax + upleftx / 4, yax - uplefty / 4);
+                      display.drawLine(xax + upleftx / 4, yax - uplefty / 4, xax + upx / 4, yax - upy / 4);
+
+                      display.drawPixel(xax, yax);
+
+                      //Update LCD
+                      display.updateDisplay();
                       break;
                     }
 
-                } //results
-                delay(20);
-                display.clearDisplay();
-
-                printSTR(anastick, 22 + 50, 15);
-
-                display.drawStr(22 + 50, 25, "U:");
-                printSTR(String(upy), 100, 25);
-                display.drawStr(22 + 50, 35, "D:");
-                printSTR(String(downy), 100, 35);
-                display.drawStr(22 + 50, 45, "L:");
-                printSTR(String(leftx), 100, 45);
-                display.drawStr(22 + 50, 55, "R:");
-                printSTR(String(rightx), 100, 55);
-
-                display.drawLine(xax + upx / 4, yax - upy / 4, xax + uprightx / 4, yax - uprighty / 4);
-                display.drawLine(xax + uprightx / 4, yax - uprighty / 4, xax + rightx / 4, yax - righty / 4);
-                display.drawLine(xax + rightx / 4, yax - righty / 4, xax + downrightx / 4, yax - downrighty / 4);
-                display.drawLine(xax + downrightx / 4, yax - downrighty / 4, xax + downx / 4, yax - downy / 4);
-                display.drawLine(xax + downx / 4, yax - downy / 4, xax + downleftx / 4, yax - downlefty / 4);
-                display.drawLine(xax + downleftx / 4, yax - downlefty / 4, xax + leftx / 4, yax - lefty / 4);
-                display.drawLine(xax + leftx / 4, yax - lefty / 4, xax + upleftx / 4, yax - uplefty / 4);
-                display.drawLine(xax + upleftx / 4, yax - uplefty / 4, xax + upx / 4, yax - upy / 4);
-
-                display.drawPixel(xax, yax);
-
-                //Update LCD
-                display.updateDisplay();
+                }  //results
                 break;
-              } //display results
+              }  //display results
 
-            case 1:// +y Up
+            case 1:  // +y Up
               {
                 display.drawStr(34, 26, "Hold Stick Up");
                 display.drawStr(34, 34, "then press A");
                 //display.drawBitmap(110, 60, ana1);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   bupx = N64_status.stick_x;
                   bupy = N64_status.stick_y;
                   // reset button
@@ -1272,13 +1356,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 2:// +y+x Up-Right
+            case 2:  // +y+x Up-Right
               {
-                display.drawStr(42, 26, "Up-Right" );
+                display.drawStr(42, 26, "Up-Right");
                 //display.drawBitmap(110, 60, ana2);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   buprightx = N64_status.stick_x;
                   buprighty = N64_status.stick_y;
                   test = 3;
@@ -1290,13 +1373,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 3:// +x Right
+            case 3:  // +x Right
               {
-                display.drawStr(50, 26, "Right" );
+                display.drawStr(50, 26, "Right");
                 //display.drawBitmap(110, 60, ana3);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   brightx = N64_status.stick_x;
                   brighty = N64_status.stick_y;
                   test = 4;
@@ -1308,13 +1390,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 4:// -y+x Down-Right
+            case 4:  // -y+x Down-Right
               {
                 display.drawStr(38, 26, "Down-Right");
                 //display.drawBitmap(110, 60, ana4);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   bdownrightx = N64_status.stick_x;
                   bdownrighty = N64_status.stick_y;
                   test = 5;
@@ -1326,13 +1407,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 5:// -y Down
+            case 5:  // -y Down
               {
                 display.drawStr(49, 26, "Down");
                 //display.drawBitmap(110, 60, ana5);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   bdownx = N64_status.stick_x;
                   bdowny = N64_status.stick_y;
                   test = 6;
@@ -1344,13 +1424,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 6:// -y-x Down-Left
+            case 6:  // -y-x Down-Left
               {
                 display.drawStr(39, 26, "Down-Left");
                 //display.drawBitmap(110, 60, ana6);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   bdownleftx = N64_status.stick_x;
                   bdownlefty = N64_status.stick_y;
                   test = 7;
@@ -1362,13 +1441,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 7:// -x Left
+            case 7:  // -x Left
               {
-                display.drawStr(51, 26, "Left" );
+                display.drawStr(51, 26, "Left");
                 //display.drawBitmap(110, 60, ana7);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   bleftx = N64_status.stick_x;
                   blefty = N64_status.stick_y;
                   test = 8;
@@ -1380,13 +1458,12 @@ void controllerTest_LCD() {
                 break;
               }
 
-            case 8:// +y+x Up-Left
+            case 8:  // +y+x Up-Left
               {
                 display.drawStr(43, 26, "Up-Left");
                 //display.drawBitmap(110, 60, ana8);
 
-                if (button == "Press a button" && lastbutton == "A")
-                {
+                if (button == "Press a button" && lastbutton == "A") {
                   bupleftx = N64_status.stick_x;
                   buplefty = N64_status.stick_y;
                   test = 0;
@@ -1398,541 +1475,13 @@ void controllerTest_LCD() {
                 break;
               }
           }
-          if (test != 0)
-          {
+          if (test != 0) {
             display.drawStr(38, 8, "Benchmark");
             display.drawLine(0, 9, 128, 9);
           }
           display.updateDisplay();
           // go to next screen
           nextscreen();
-          break;
-        }
-    }
-  }
-
-}
-#endif
-
-#ifdef enable_OLED
-#define CENTER 64
-
-void oledPrint(const char string[], int x, int y) {
-
-  if (x == CENTER)
-    x = 64 - (strlen(string) / 2) * 6;
-  display.setCursor(x, y);
-  display.print(string);
-}
-
-void oledPrint(int number, int x, int y) {
-  display.setCursor(x, y);
-  display.print(number);
-}
-
-void printSTR(String st, int x, int y)
-{
-  char buf[st.length() + 1];
-
-  st.toCharArray(buf, st.length() + 1);
-  oledPrint(buf, x, y);
-}
-
-void controllerTest_OLED() {
-  // on which screens do we start
-  int startscreen = 1;
-  int mode = 0;
-  int test = 1;
-
-  //name of the current displayed result
-  String anastick = "";
-  int prevStickX = 0;
-
-  // Graph
-  int xax = 22 + 24; // midpoint x
-  int yax = 24; // midpoint y
-  int zax = 24; // size
-
-  // variables to display test data of different sticks
-  int upx = 0;
-  int upy = 0;
-  int uprightx = 0;
-  int uprighty = 0;
-  int rightx = 0;
-  int righty = 0;
-  int downrightx = 0;
-  int downrighty = 0;
-  int downx = 0;
-  int downy = 0;
-  int downleftx = 0;
-  int downlefty = 0;
-  int leftx = 0;
-  int lefty = 0;
-  int upleftx = 0;
-  int uplefty = 0;
-
-  // variables to save test data
-  int bupx = 0;
-  int bupy = 0;
-  int buprightx = 0;
-  int buprighty = 0;
-  int brightx = 0;
-  int brighty = 0;
-  int bdownrightx = 0;
-  int bdownrighty = 0;
-  int bdownx = 0;
-  int bdowny = 0;
-  int bdownleftx = 0;
-  int bdownlefty = 0;
-  int bleftx = 0;
-  int blefty = 0;
-  int bupleftx = 0;
-  int buplefty = 0;
-  int results = 0;
-
-  while (quit) {
-    // Get Button and analog stick
-    get_button();
-
-    switch (startscreen)
-    {
-      case 1:
-        {
-          display.clearDisplay();
-          oledPrint("Button Test", CENTER, 0);
-          display.drawLine(22 + 0, 10, 22 + 84, 10, WHITE);
-
-          // Print Button
-          printSTR("       " + button + "       ", CENTER, 20);
-
-          // Print Stick X Value
-          String stickx = String("X: " + String(N64_status.stick_x, DEC) + "   ");
-          printSTR(stickx, 22 + 0, 38);
-
-          // Print Stick Y Value
-          String sticky = String("Y: " + String(N64_status.stick_y, DEC) + "   ");
-          printSTR(sticky, 22 + 60, 38);
-
-          printSTR("(Continue with START)", 0, 55);
-          //Update LCD
-          display.display();
-
-          // go to next screen
-          if (button == "Press a button" && lastbutton == "START")
-          {
-            // reset button
-            lastbutton = "N/A";
-
-            display.clearDisplay();
-            if (startscreen != 4)
-              startscreen = startscreen + 1;
-            else
-            {
-              startscreen = 1;
-              test = 1;
-            }
-          }
-          else if (button == "Press a button" && lastbutton == "Z" && startscreen == 4)
-          {
-            // Quit
-            quit = 0;
-          }
-          break;
-        }
-      case 2:
-        {
-          oledPrint("Range Test", CENTER, 55);
-          display.drawLine(22 + 0, 50, 22 + 84, 50, WHITE);
-
-          // Print Stick X Value
-          String stickx = String("X:" + String(N64_status.stick_x, DEC) + "   ");
-          printSTR(stickx, 22 + 54, 8);
-
-          // Print Stick Y Value
-          String sticky = String("Y:" + String(N64_status.stick_y, DEC) + "   ");
-          printSTR(sticky, 22 + 54, 18);
-
-          // Draw Axis
-          //display.drawLine(xax - zax, yax, xax + zax, yax, WHITE);
-          //display.drawLine(xax, yax - zax, xax, yax + zax, WHITE);
-          display.drawPixel(xax, yax, WHITE);
-          display.drawPixel(xax, yax - 80 / 4, WHITE);
-          display.drawPixel(xax, yax + 80 / 4, WHITE);
-          display.drawPixel(xax + 80 / 4, yax, WHITE);
-          display.drawPixel(xax - 80 / 4, yax, WHITE);
-
-          // Draw corners
-          display.drawPixel(xax - 68 / 4, yax - 68 / 4, WHITE);
-          display.drawPixel(xax + 68 / 4, yax + 68 / 4, WHITE);
-          display.drawPixel(xax + 68 / 4, yax - 68 / 4, WHITE);
-          display.drawPixel(xax - 68 / 4, yax + 68 / 4, WHITE);
-
-          //Draw Analog Stick
-          if (mode == 1)
-          {
-            display.drawPixel(xax + N64_status.stick_x / 4, yax - N64_status.stick_y / 4, WHITE);
-            //Update LCD
-            display.display();
-          }
-          else
-          {
-            display.drawCircle(xax + N64_status.stick_x / 4, yax - N64_status.stick_y / 4, 2, WHITE);
-            //Update LCD
-            display.display();
-            display.clearDisplay();
-          }
-
-          // switch mode
-          if (button == "Press a button" && lastbutton == "Z")
-          {
-            if (mode == 0)
-            {
-              mode = 1;
-              display.clearDisplay();
-            }
-            else
-            {
-              mode = 0;
-              display.clearDisplay();
-            }
-          }
-          // go to next screen
-          if (button == "Press a button" && lastbutton == "START")
-          {
-            // reset button
-            lastbutton = "N/A";
-
-            display.clearDisplay();
-            if (startscreen != 4)
-              startscreen = startscreen + 1;
-            else
-            {
-              startscreen = 1;
-              test = 1;
-            }
-          }
-          else if (button == "Press a button" && lastbutton == "Z" && startscreen == 4)
-          {
-            // Quit
-            quit = 0;
-          }
-          break;
-        }
-      case 3:
-        {
-          display.drawPixel(22 + prevStickX, 40, BLACK);
-          oledPrint("Skipping Test", CENTER, 0);
-          display.drawLine(22 + 0, 10, 22 + 83, 10, WHITE);
-          display.drawRect(22 + 0, 15, 22 + 59, 21, WHITE);
-          if (N64_status.stick_x > 0) {
-            display.drawLine(22 + N64_status.stick_x, 15, 22 + N64_status.stick_x, 35, WHITE);
-            display.drawPixel(22 + N64_status.stick_x, 40, WHITE);
-            prevStickX = N64_status.stick_x;
-          }
-
-          printSTR("Try to fill box by", 0, 45);
-          printSTR("slowly moving right", 0, 55);
-          //Update LCD
-          display.display();
-
-          if (button == "Press a button" && lastbutton == "Z")
-          {
-            // reset button
-            lastbutton = "N/A";
-
-            display.clearDisplay();
-          }
-          // go to next screen
-          if (button == "Press a button" && lastbutton == "START")
-          {
-            // reset button
-            lastbutton = "N/A";
-
-            display.clearDisplay();
-            if (startscreen != 4)
-              startscreen = startscreen + 1;
-            else
-            {
-              startscreen = 1;
-              test = 1;
-            }
-          }
-          else if (button == "Press a button" && lastbutton == "Z" && startscreen == 4)
-          {
-            // Quit
-            quit = 0;
-          }
-          break;
-        }
-      case 4:
-        {
-          switch ( test )
-          {
-            case 0:  // Display results
-              {
-                switch (results)
-                {
-                  case 0:
-                    {
-                      anastick = "YOURS";
-                      upx = bupx;
-                      upy = bupy;
-                      uprightx = buprightx;
-                      uprighty = buprighty;
-                      rightx = brightx;
-                      righty = brighty;
-                      downrightx = bdownrightx;
-                      downrighty = bdownrighty;
-                      downx = bdownx;
-                      downy = bdowny;
-                      downleftx = bdownleftx;
-                      downlefty = bdownlefty;
-                      leftx = bleftx;
-                      lefty = blefty;
-                      upleftx = bupleftx;
-                      uplefty = buplefty;
-
-                      if (button == "Press a button" && lastbutton == "A")
-                      {
-                        // reset button
-                        lastbutton = "N/A";
-                        results = 1;
-                      }
-
-                      break;
-                    }
-                  case 1:
-                    {
-                      anastick = "ORIG";
-                      upx = 1;
-                      upy = 84;
-                      uprightx = 67;
-                      uprighty = 68;
-                      rightx = 83;
-                      righty = -2;
-                      downrightx = 67;
-                      downrighty = -69;
-                      downx = 3;
-                      downy = -85;
-                      downleftx = -69;
-                      downlefty = -70;
-                      leftx = -85;
-                      lefty = 0;
-                      upleftx = -68;
-                      uplefty = 68;
-
-                      if (button == "Press a button" && lastbutton == "A")
-                      {
-                        // reset button
-                        lastbutton = "N/A";
-                        results = 0;
-                      }
-                      break;
-                    }
-
-                } //results
-                display.clearDisplay();
-
-                printSTR(anastick, 22 + 50, 0);
-
-                oledPrint("U:", 22 + 50, 10);
-                oledPrint(upy, 100, 10);
-                oledPrint("D:", 22 + 50, 20);
-                oledPrint(downy, 100, 20);
-                oledPrint("L:", 22 + 50, 30);
-                oledPrint(leftx, 100, 30);
-                oledPrint("R:", 22 + 50, 40);
-                oledPrint(rightx, 100, 40);
-
-                display.drawLine(xax + upx / 4, yax - upy / 4, xax + uprightx / 4, yax - uprighty / 4, WHITE);
-                display.drawLine(xax + uprightx / 4, yax - uprighty / 4, xax + rightx / 4, yax - righty / 4, WHITE);
-                display.drawLine(xax + rightx / 4, yax - righty / 4, xax + downrightx / 4, yax - downrighty / 4, WHITE);
-                display.drawLine(xax + downrightx / 4, yax - downrighty / 4, xax + downx / 4, yax - downy / 4, WHITE);
-                display.drawLine(xax + downx / 4, yax - downy / 4, xax + downleftx / 4, yax - downlefty / 4, WHITE);
-                display.drawLine(xax + downleftx / 4, yax - downlefty / 4, xax + leftx / 4, yax - lefty / 4, WHITE);
-                display.drawLine(xax + leftx / 4, yax - lefty / 4, xax + upleftx / 4, yax - uplefty / 4, WHITE);
-                display.drawLine(xax + upleftx / 4, yax - uplefty / 4, xax + upx / 4, yax - upy / 4, WHITE);
-
-                display.drawPixel(xax, yax, WHITE);
-
-                printSTR("(Quit with Z)", 25, 55);
-                //Update LCD
-                display.display();
-                break;
-              } //display results
-
-            case 1:// +y Up
-              {
-                oledPrint("Hold Stick Up", CENTER, 18);
-                oledPrint("then press A", CENTER, 28);
-                //myOLED.drawBitmap(110, 60, ana1);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  bupx = N64_status.stick_x;
-                  bupy = N64_status.stick_y;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                  test = 2;
-                }
-                break;
-              }
-
-            case 2:// +y+x Up-Right
-              {
-                oledPrint("Up-Right", CENTER, 22 );
-                //myOLED.drawBitmap(110, 60, ana2);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  buprightx = N64_status.stick_x;
-                  buprighty = N64_status.stick_y;
-                  test = 3;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-
-            case 3:// +x Right
-              {
-                oledPrint("Right", CENTER, 22 );
-                //myOLED.drawBitmap(110, 60, ana3);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  brightx = N64_status.stick_x;
-                  brighty = N64_status.stick_y;
-                  test = 4;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-
-            case 4:// -y+x Down-Right
-              {
-                oledPrint("Down-Right", CENTER, 22 );
-                //myOLED.drawBitmap(110, 60, ana4);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  bdownrightx = N64_status.stick_x;
-                  bdownrighty = N64_status.stick_y;
-                  test = 5;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-
-            case 5:// -y Down
-              {
-                oledPrint("Down", CENTER, 22 );
-                //myOLED.drawBitmap(110, 60, ana5);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  bdownx = N64_status.stick_x;
-                  bdowny = N64_status.stick_y;
-                  test = 6;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-
-            case 6:// -y-x Down-Left
-              {
-                oledPrint("Down-Left", CENTER, 22 );
-                //myOLED.drawBitmap(110, 60, ana6);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  bdownleftx = N64_status.stick_x;
-                  bdownlefty = N64_status.stick_y;
-                  test = 7;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-
-            case 7:// -x Left
-              {
-                oledPrint("Left", CENTER, 22 );
-                //myOLED.drawBitmap(110, 60, ana7);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  bleftx = N64_status.stick_x;
-                  blefty = N64_status.stick_y;
-                  test = 8;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-
-            case 8:// +y+x Up-Left
-              {
-                oledPrint("Up-Left", CENTER, 22);
-                //myOLED.drawBitmap(110, 60, ana8);
-
-                if (button == "Press a button" && lastbutton == "A")
-                {
-                  bupleftx = N64_status.stick_x;
-                  buplefty = N64_status.stick_y;
-                  test = 0;
-                  // reset button
-                  lastbutton = "N/A";
-
-                  display.clearDisplay();
-                }
-                break;
-              }
-          }
-          if (test != 0)
-          {
-            oledPrint("Benchmark", CENTER, 0);
-            display.drawLine(22 + 0, 9, 22 + 83, 9, WHITE);
-            printSTR("(Quit with Z)", 25, 55);
-          }
-          display.display();
-          // go to next screen
-          if (button == "Press a button" && lastbutton == "START")
-          {
-            // reset button
-            lastbutton = "N/A";
-
-            display.clearDisplay();
-            if (startscreen != 4)
-              startscreen = startscreen + 1;
-            else
-            {
-              startscreen = 1;
-              test = 1;
-            }
-          }
-          else if (button == "Press a button" && lastbutton == "Z" && startscreen == 4)
-          {
-            // Quit
-            quit = 0;
-          }
           break;
         }
     }
@@ -1946,160 +1495,72 @@ void controllerTest_OLED() {
  *****************************************/
 // Reset the controller
 void resetController() {
-  // Reset controller
-  unsigned char command[] = {0xFF};
-  // don't want interrupts getting in the way
+  const byte command[] = { 0xFF };
   noInterrupts();
-  // Send command
-  N64_send(command, 1);
-  // Send stop
-  N64_stop();
-  // Enable interrupts
+  sendJoyBus(command, sizeof(command));
   interrupts();
   delay(100);
 }
 
 // read 3 bytes from controller
 void checkController() {
+  byte response[8];
+  const byte command[] = { 0x00 };
+
   display_Clear();
 
   // Check if line is HIGH
   if (!N64_QUERY)
-    print_Error(F("Data line LOW"), true);
-
-  // Send status command
-  unsigned char command[] = {0x0};
-
-  // Empty buffer
-  for (word i = 0; i < 265; i++) {
-    N64_raw_dump[i] = 0xFF;
-  }
+    print_FatalError(F("Data line LOW"));
 
   // don't want interrupts getting in the way
   noInterrupts();
-  N64_send(command, 1);
-  N64_stop();
-  // read in data
-  N64_get(32);
+  sendJoyBus(command, sizeof(command));
+  recvJoyBus(response, sizeof(response));
   // end of time sensitive code
   interrupts();
 
-  // Empty N64_raw_dump into myBlock
-  for (word i = 0; i < 32; i += 8) {
-    boolean byteFlipped[9];
-
-    // Flip byte order
-    byteFlipped[0] = N64_raw_dump[i + 7];
-    byteFlipped[1] = N64_raw_dump[i + 6];
-    byteFlipped[2] = N64_raw_dump[i + 5];
-    byteFlipped[3] = N64_raw_dump[i + 4];
-    byteFlipped[4] = N64_raw_dump[i + 3];
-    byteFlipped[5] = N64_raw_dump[i + 2];
-    byteFlipped[6] = N64_raw_dump[i + 1];
-    byteFlipped[7] = N64_raw_dump[i + 0];
-
-    // Join bits into one byte
-    unsigned char myByte = 0;
-    for (byte j = 0; j < 8; ++j) {
-      if (byteFlipped[j]) {
-        myByte |= 1 << j;
-      }
-    }
-    if ((i == 0) && (myByte != 0x05))
-      print_Error(F("Controller not found"), true);
-    if ((i == 16) && (myByte != 0x01))
-      print_Error(F("Controller Pak not found"), true);
-    if ((i == 16) && (myByte == 0x04))
-      print_Error(F("CRC Error"), true);
-  }
+  if (response[0] != 0x05)
+    print_FatalError(F("Controller not found"));
+  if (response[2] != 0x01)
+    print_FatalError(F("Controller Pak not found"));
 }
 
 // read 32bytes from controller pak and calculate CRC
-byte readBlock(word myAddress) {
+byte readBlock(byte* output, word myAddress) {
+  byte response_crc;
   // Calculate the address CRC
   word myAddressCRC = addrCRC(myAddress);
-
-  // Read Controller Pak command
-  unsigned char command[] = {0x02};
-  // Address Command
-  unsigned char addressHigh[] = {(unsigned char)(myAddressCRC >> 8)};
-  unsigned char addressLow[] = {(unsigned char)(myAddressCRC & 0xff)};
-
-  // Empty buffer
-  for (word i = 0; i < 265; i++) {
-    N64_raw_dump[i] = 0xFF;
-  }
+  const byte command[] = { 0x02, (byte)(myAddressCRC >> 8), (byte)(myAddressCRC & 0xff) };
+  word error;
 
   // don't want interrupts getting in the way
   noInterrupts();
-  // send those 3 bytes
-  N64_send(command, 1);
-  N64_send(addressHigh, 1);
-  N64_send(addressLow, 1);
-  N64_stop();
-  // read in 32 byte data + 1 byte crc
-  N64_get(264);
+  sendJoyBus(command, sizeof(command));
+  error = recvJoyBus(output, 32);
+  if (error == 0)
+    error = recvJoyBus(&response_crc, 1);
   // end of time sensitive code
   interrupts();
 
-  // Empty N64_raw_dump into myBlock
-  for (word i = 0; i < 256; i += 8) {
-    boolean byteFlipped[9];
-
-    // Flip byte order
-    byteFlipped[0] = N64_raw_dump[i + 7];
-    byteFlipped[1] = N64_raw_dump[i + 6];
-    byteFlipped[2] = N64_raw_dump[i + 5];
-    byteFlipped[3] = N64_raw_dump[i + 4];
-    byteFlipped[4] = N64_raw_dump[i + 3];
-    byteFlipped[5] = N64_raw_dump[i + 2];
-    byteFlipped[6] = N64_raw_dump[i + 1];
-    byteFlipped[7] = N64_raw_dump[i + 0];
-
-    // Join bits into one byte
-    unsigned char myByte = 0;
-    for (byte j = 0; j < 8; ++j) {
-      if (byteFlipped[j]) {
-        myByte |= 1 << j;
-      }
-    }
-    // Save byte into block array
-    myBlock[i / 8] = myByte;
+  if (error) {
+    myFile.close();
+    println_Msg(F("Controller Pak was"));
+    println_Msg(F("not dumped due to a"));
+    print_FatalError(F("read timeout"));
   }
 
-  // Get CRC of block send
-  boolean byteFlipped[9];
-  // Flip byte order
-  byteFlipped[0] = N64_raw_dump[256 + 7];
-  byteFlipped[1] = N64_raw_dump[256 + 6];
-  byteFlipped[2] = N64_raw_dump[256 + 5];
-  byteFlipped[3] = N64_raw_dump[256 + 4];
-  byteFlipped[4] = N64_raw_dump[256 + 3];
-  byteFlipped[5] = N64_raw_dump[256 + 2];
-  byteFlipped[6] = N64_raw_dump[256 + 1];
-  byteFlipped[7] = N64_raw_dump[256 + 0];
-
-  unsigned char blockCRC = 0;
-  for (byte k = 0; k < 8; ++k) {
-    if (byteFlipped[k]) {
-      blockCRC |= 1 << k;
-    }
-  }
-
-  // Calculate CRC of block received
-  unsigned char myCRC = dataCRC(&myBlock[0]);
-
-  // Compare
-  if (blockCRC != myCRC) {
+  // Compare with computed CRC
+  if (response_crc != dataCRC(output)) {
     display_Clear();
     // Close the file:
     myFile.close();
     println_Msg(F("Controller Pak was"));
     println_Msg(F("not dumped due to a"));
-    print_Error(F("protocol CRC error"), true);
+    print_FatalError(F("protocol CRC error"));
   }
 
-  return blockCRC;
+  return response_crc;
 }
 
 // reads the MPK file to the sd card
@@ -2125,12 +1586,12 @@ void readMPK() {
   strcat(filePath, ".crc");
   FsFile crcFile;
   if (!crcFile.open(filePath, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't open file on SD"), true);
+    print_FatalError(open_file_STR);
   }
 
   //open mpk file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't open file on SD"), true);
+    print_FatalError(open_file_STR);
   }
 
   print_Msg(F("Saving N64/MPK/"));
@@ -2149,17 +1610,11 @@ void readMPK() {
   draw_progressbar(0, totalProgressBar);
 
   // Controller paks, which all have 32kB of space, are mapped between 0x0000 – 0x7FFF
-  // Read 512 byte into sdBuffer
   for (word currSdBuffer = 0x0000; currSdBuffer < 0x8000; currSdBuffer += 512) {
-    // Read 32 byte block
-    for (word currBlock = 0; currBlock < 512; currBlock += 32) {
+    // Read 32 byte block into sdBuffer
+    for (word currBlock = 0; currBlock < sizeof(sdBuffer); currBlock += 32) {
       // Read one block of the Controller Pak into array myBlock and write CRC of that block to crc file
-      crcFile.write(readBlock(currSdBuffer + currBlock));
-
-      // Copy block to SdBuffer
-      for (byte currByte = 0; currByte < 32; currByte++) {
-        sdBuffer[currBlock + currByte] = myBlock[currByte];
-      }
+      crcFile.write(readBlock(&sdBuffer[currBlock], currSdBuffer + currBlock));
 
       // Real N64 has about 627us pause between banks, add a bit extra delay
       if (currBlock < 479)
@@ -2167,7 +1622,7 @@ void readMPK() {
     }
     // This will take 1300us
     blinkLED();
-    myFile.write(sdBuffer, 512);
+    myFile.write(sdBuffer, sizeof(sdBuffer));
     // Blink led
     blinkLED();
     // Update progress bar
@@ -2183,18 +1638,18 @@ void readMPK() {
 void verifyCRC() {
   writeErrors = 0;
 
-  println_Msg(F("Verifying..."));
+  print_STR(verifying_STR, 1);
   display_Update();
 
   //open CRC file on sd card
   FsFile crcFile;
   if (!crcFile.open(filePath, O_READ)) {
-    print_Error(F("Can't open file on SD"), true);
+    print_FatalError(open_file_STR);
   }
 
   //open MPK file on sd card
   if (!myFile.open(fileName, O_READ)) {
-    print_Error(F("Can't open file on SD"), true);
+    print_FatalError(open_file_STR);
   }
 
   //Initialize progress bar
@@ -2225,55 +1680,57 @@ void verifyCRC() {
   crcFile.close();
 
   if (writeErrors == 0) {
-    println_Msg(F("Read successfully"));
+    println_Msg(F("Saved successfully"));
+    sd.remove(filePath);
     display_Update();
-  }
-  else {
-    print_Msg(F("Error: "));
+  } else {
+    print_STR(error_STR, 0);
     print_Msg(writeErrors);
     println_Msg(F(" blocks "));
-    print_Error(F("did not verify."), false);
+    print_Error(did_not_verify_STR);
   }
 }
 
 // Calculates the checksum of the header
-boolean checkHeader(byte startAddress) {
+boolean checkHeader(byte* buf) {
   word sum = 0;
+  word buf_sum = (buf[28] << 8) + buf[29];
 
   // first 28 bytes are the header, then comes the checksum(word) followed by the reverse checksum(0xFFF2 - checksum)
-  for (int i = 0; i < 28; i += 2) {
-    word tempword = (((sdBuffer[startAddress + i] & 0xFF) << 8) | (sdBuffer[startAddress + i + 1] & 0xFF));
-    sum += tempword;
+  for (byte i = 0; i < 28; i += 2) {
+    sum += (buf[i] << 8) + buf[i + 1];
   }
 
-  if ((((sdBuffer[startAddress + 28] & 0xFF) << 8) | (sdBuffer[startAddress + 29] & 0xFF)) != (sum & 0xFFFF)) {
-    return 0;
-  }
-  else {
-    return 1;
-  }
+  return sum == buf_sum;
 }
 
 // verifies if Controller Pak holds valid header data
 void validateMPK() {
+  byte writeErrors = 0;
+  boolean failed = false;
+  SdFile mpk_file;
+  byte buf[256];
+
   //open file on sd card
-  if (!myFile.open(fileName, O_READ)) {
-    print_Error(F("Can't open file"), true);
+  if (!mpk_file.open(fileName, O_READ)) {
+    print_FatalError(open_file_STR);
   }
 
   // Read first 256 byte which contains the header including checksum and reverse checksum and three copies of it
-  myFile.read(sdBuffer, 256);
+  mpk_file.read(buf, sizeof(buf));
 
   //Check all four header copies
   writeErrors = 0;
-  if (!checkHeader(0x20))
+  if (!checkHeader(&buf[0x20]))
     writeErrors++;
-  if (!checkHeader(0x60))
+  if (!checkHeader(&buf[0x60]))
     writeErrors++;
-  if (!checkHeader(0x80))
+  if (!checkHeader(&buf[0x80]))
     writeErrors++;
-  if (!checkHeader(0xC0))
+  if (!checkHeader(&buf[0xC0]))
     writeErrors++;
+  if (writeErrors)
+    failed = true;
 
   print_Msg(F("HDR: "));
   print_Msg(4 - writeErrors);
@@ -2282,32 +1739,46 @@ void validateMPK() {
 
   // Check both TOC copies
   writeErrors = 0;
-  word sum = 0;
 
   // Read 2nd and 3rd 256 byte page with TOC info
   for (word currSdBuffer = 0x100; currSdBuffer < 0x300; currSdBuffer += 256) {
-    sum = 0;
+    byte sum = 0;
 
     // Read 256 bytes into SD buffer
-    myFile.read(sdBuffer, 256);
+    mpk_file.read(buf, sizeof(buf));
 
     // Calculate TOC checksum
-    for (int i = 5; i < 128; i++ ) {
-      sum += sdBuffer[(i << 1) + 1];
+    for (byte i = 5; i < 128; i++) {
+      sum += buf[(i << 1) + 1];
     }
-    if (sdBuffer[1] != (sum & 0xFF))
+    if (buf[1] != sum)
       writeErrors++;
   }
+  if (writeErrors)
+    failed = true;
   print_Msg(F("ToC: "));
   print_Msg(2 - writeErrors);
   println_Msg(F("/2"));
+
+  print_Msg(F("Consistency check "));
+  if (failed) {
+    errorLvl = 1;
+    print_Msg(F("failed"));
+  } else {
+    errorLvl = 0;
+    print_Msg(F("pased"));
+  }
   display_Update();
 
   // Close the file:
-  myFile.close();
+  mpk_file.close();
 }
 
 void writeMPK() {
+  // 3 command bytes, 32 data bytes
+  byte command[3 + 32];
+  command[0] = 0x03;
+
   // Create filepath
   sprintf(filePath, "%s/%s", filePath, fileName);
   print_Msg(F("Writing "));
@@ -2319,73 +1790,50 @@ void writeMPK() {
   if (myFile.open(filePath, O_READ)) {
 
     //Initialize progress bar
-    uint32_t processedProgressBar = 0;
-    uint32_t totalProgressBar = (uint32_t)(0x7FFF);
+    uint32_t totalProgressBar = 0x7FFF;
     draw_progressbar(0, totalProgressBar);
 
-    for (word currSdBuffer = 0x0000; currSdBuffer < 0x8000; currSdBuffer += 512) {
-      // Read 512 bytes into SD buffer, takes 1500us
-      myFile.read(sdBuffer, 512);
+    for (word address = 0x0000; address < 0x8000; address += 32) {
+      myFile.read(command + 3, sizeof(command) - 3);
 
-      // Write 32 byte block
-      for (word currBlock = 0; currBlock < 512; currBlock += 32) {
-        // Calculate the address CRC
-        word myAddressCRC = addrCRC(currSdBuffer + currBlock);
+      word address_with_crc = addrCRC(address);
+      command[1] = (byte)(address_with_crc >> 8);
+      command[2] = (byte)(address_with_crc & 0xff);
 
-        // Copy 32 byte block from SdBuffer
-        for (byte currByte = 0; currByte < 32; currByte++) {
-          myBlock[currByte] = sdBuffer[currBlock + currByte] ;
-        }
+      // don't want interrupts getting in the way
+      noInterrupts();
+      sendJoyBus(command, sizeof(command));
+      // Enable interrupts
+      interrupts();
 
-        // Write Controller Pak command
-        unsigned char command[] = {0x03};
-        // Address Command
-        unsigned char addressHigh[] = {(unsigned char)(myAddressCRC >> 8)};
-        unsigned char addressLow[] = {(unsigned char)(myAddressCRC & 0xff)};
+      // Real N64 has about 627us pause between banks, add a bit extra delay
+      delayMicroseconds(650);
 
-        // don't want interrupts getting in the way
-        noInterrupts();
-        // Send write command
-        N64_send(command, 1);
-        // Send block number
-        N64_send(addressHigh, 1);
-        N64_send(addressLow, 1);
-        // Send data to write
-        N64_send(myBlock, 32);
-        // Send stop
-        N64_stop();
-        // Enable interrupts
-        interrupts();
-
-        // Real N64 has about 627us pause between banks, add a bit extra delay
-        if (currBlock < 479)
-          delayMicroseconds(1500);
+      if ((address & 0x1FF) == 0) {
+        // Blink led
+        // Update progress bar
+        blinkLED();
+        draw_progressbar(address, totalProgressBar);
       }
-
-      // Blink led
-      blinkLED();
-      // Update progress bar
-      processedProgressBar += 512;
-      draw_progressbar(processedProgressBar, totalProgressBar);
     }
     // Close the file:
     myFile.close();
-  }
-  else {
-    print_Error(F("Can't open file on SD"), true);
+  } else {
+    print_FatalError(open_file_STR);
   }
 }
 
 // verifies if write was successful
 void verifyMPK() {
+  byte block[32];
   writeErrors = 0;
 
-  println_Msg(F("Verifying..."));
+  print_STR(verifying_STR, 1);
   display_Update();
 
   //open file on sd card
   if (!myFile.open(filePath, O_READ)) {
-    print_Error(F("Can't open file on SD"), true);
+    print_FatalError(open_file_STR);
   }
 
   //Initialize progress bar
@@ -2394,18 +1842,18 @@ void verifyMPK() {
   draw_progressbar(0, totalProgressBar);
 
   // Controller paks, which all have 32kB of space, are mapped between 0x0000 – 0x7FFF
-  for (word currSdBuffer = 0x0000; currSdBuffer < 0x8000; currSdBuffer += 512) {
+  for (word currSdBuffer = 0x0000; currSdBuffer < 0x8000; currSdBuffer += sizeof(sdBuffer)) {
     // Read 512 bytes into SD buffer
-    myFile.read(sdBuffer, 512);
+    myFile.read(sdBuffer, sizeof(sdBuffer));
 
     // Compare 32 byte block
-    for (word currBlock = 0; currBlock < 512; currBlock += 32) {
-      // Read one block of the Controller Pak into array myBlock
-      readBlock(currSdBuffer + currBlock);
+    for (word currBlock = 0; currBlock < sizeof(sdBuffer); currBlock += 32) {
+      // Read one block of the Controller Pak
+      readBlock(block, currSdBuffer + currBlock);
 
       // Check against file on SD card
       for (byte currByte = 0; currByte < 32; currByte++) {
-        if (sdBuffer[currBlock + currByte] != myBlock[currByte]) {
+        if (sdBuffer[currBlock + currByte] != block[currByte]) {
           writeErrors++;
         }
       }
@@ -2426,12 +1874,11 @@ void verifyMPK() {
   if (writeErrors == 0) {
     println_Msg(F("Written successfully"));
     display_Update();
-  }
-  else {
-    print_Msg(F("Error: "));
+  } else {
+    print_STR(error_STR, 0);
     print_Msg(writeErrors);
-    println_Msg(F(" bytes "));
-    print_Error(F("did not verify."), false);
+    print_STR(_bytes_STR, 1);
+    print_Error(did_not_verify_STR);
   }
 }
 
@@ -2480,11 +1927,11 @@ void printCartInfo_N64() {
 
     // Wait for user input
     println_Msg(F(" "));
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     wait();
-  }
-  else {
+  } else {
     // Display error
     display_Clear();
     println_Msg(F("GAMEPAK ERROR"));
@@ -2498,9 +1945,10 @@ void printCartInfo_N64() {
     display_Update();
 
     strcpy(romName, "GPERROR");
-    print_Error(F("Cartridge unknown"), false);
+    print_Error(F("Cartridge unknown"));
     println_Msg("");
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     wait();
 
@@ -2511,8 +1959,7 @@ void printCartInfo_N64() {
     N64RomMenu = question_box(F("Select ROM size"), menuOptions, 6, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (N64RomMenu)
-    {
+    switch (N64RomMenu) {
       case 0:
         // 4MB
         cartSize = 4;
@@ -2546,16 +1993,6 @@ void printCartInfo_N64() {
   }
 }
 
-// improved strcmp function that ignores case to prevent checksum comparison issues
-int strcicmp(char const * a, char const * b)
-{
-  for (;; a++, b++) {
-    int d = tolower((unsigned char) * a) - tolower((unsigned char) * b);
-    if (d != 0 || !*a)
-      return d;
-  }
-}
-
 /* look-up the calculated crc in the file n64.txt on sd card
   boolean searchCRC(char crcStr[9]) {
   boolean result = 0;
@@ -2577,9 +2014,9 @@ int strcicmp(char const * a, char const * b)
       }
 
       // Check if string is a match
-      if (strcicmp(tempStr1, crcStr) == 0) {
+      if (strcasecmp(tempStr1, crcStr) == 0) {
         // Skip the , in the file
-        myFile.seekSet(myFile.curPosition() + 1);
+        myFile.seekCur(1);
 
         // Read 4 bytes into String, do it one at a time so byte order doesn't get mixed up
         sprintf(tempStr, "%c", myFile.read());
@@ -2599,7 +2036,7 @@ int strcicmp(char const * a, char const * b)
       }
       // If no match, empty string, advance by 12 and try again
       else {
-        myFile.seekSet(myFile.curPosition() + 12);
+        myFile.seekCur(12);
       }
     }
     // Close the file:
@@ -2607,14 +2044,14 @@ int strcicmp(char const * a, char const * b)
     return result;
   }
   else {
-    print_Error(F("n64.txt missing"), true);
+    print_FatalError(F("n64.txt missing"));
   }
   }*/
 
 // look-up cart id in file n64.txt on sd card
 void getCartInfo_N64() {
-  char tempStr2[2];
   char tempStr[9];
+  int read_bytes;
 
   // cart not in list
   cartSize = 0;
@@ -2634,32 +2071,23 @@ void getCartInfo_N64() {
       skip_line(&myFile);
 
       // Skip over the CRC32 checksum
-      myFile.seekSet(myFile.curPosition() + 9);
+      myFile.seekCur(9);
 
-      // Read 8 bytes into String, do it one at a time so byte order doesn't get mixed up
-      sprintf(tempStr, "%c", myFile.read());
-      for (byte i = 0; i < 7; i++) {
-        sprintf(tempStr2, "%c", myFile.read());
-        strcat(tempStr, tempStr2);
-      }
+      // Read 8 bytes into String
+      read_bytes = myFile.read(tempStr, 8);
+      tempStr[read_bytes == -1 ? 0 : read_bytes] = 0;
 
       // Check if string is a match
       if (strcmp(tempStr, checksumStr) == 0) {
         // Skip the , in the file
-        myFile.seekSet(myFile.curPosition() + 1);
+        myFile.seekCur(1);
 
-        // Read the next ascii character and subtract 48 to convert to decimal
-        cartSize = myFile.read() - 48;
-        // Remove leading 0 for single digit cart sizes
-        if (cartSize != 0) {
-          cartSize = cartSize * 10 +  myFile.read() - 48;
-        }
-        else {
-          cartSize = myFile.read() - 48;
-        }
+        read_bytes = myFile.read(tempStr, 2);
+        tempStr[read_bytes == -1 ? 0 : read_bytes] = 0;
+        cartSize = atoi(tempStr);
 
         // Skip the , in the file
-        myFile.seekSet(myFile.curPosition() + 1);
+        myFile.seekCur(1);
 
         // Read the next ascii character and subtract 48 to convert to decimal
         saveType = myFile.read() - 48;
@@ -2670,16 +2098,15 @@ void getCartInfo_N64() {
       // If no match skip to next entry
       else {
         // skip rest of line
-        myFile.seekSet(myFile.curPosition() + 7);
+        myFile.seekCur(7);
         // skip third empty line
         skip_line(&myFile);
       }
     }
     // Close the file:
     myFile.close();
-  }
-  else {
-    print_Error(F("n64.txt missing"), true);
+  } else {
+    print_FatalError(F("n64.txt missing"));
   }
 }
 
@@ -2711,33 +2138,9 @@ void idCart() {
   // Get rom version
   romVersion = sdBuffer[0x3F];
 
-  // Get name
-  byte myByte = 0;
-  byte myLength = 0;
-  for (unsigned int i = 0; i < 20; i++) {
-    myByte = sdBuffer[0x20 + i];
-    if (isprint(myByte) && myByte != '<' && myByte != '>' && myByte != ':' && myByte != '"' && myByte != '/' && myByte != '\\' && myByte != '|' && myByte != '?' && myByte != '*') {
-      romName[myLength] = char(myByte);
-    } else {
-      if (romName[myLength - 1] == 0x5F) myLength--;
-      romName[myLength] = 0x5F;
-    }
-    myLength++;
-  }
-
-  // Strip trailing white space
-  for (unsigned int i = myLength - 1; i > 0; i--) {
-    if ((romName[i] != 0x5F) && (romName[i] != 0x20)) break;
-    romName[i] = 0x00;
-    myLength--;
-  }
-
   // If name consists out of all japanese characters use cart id
-  if (myLength == 0) {
-    romName[0] = sdBuffer[0x3B];
-    romName[1] = sdBuffer[0x3C];
-    romName[2] = sdBuffer[0x3D];
-    romName[3] = sdBuffer[0x3E];
+  if (buildRomName(romName, &sdBuffer[0x20], 20) == 0) {
+    strcpy(romName, cartID);
   }
 
 #ifdef savesummarytotxt
@@ -2759,320 +2162,6 @@ void idCart() {
 #endif
 }
 
-/******************************************
-  Eeprom functions (without Adafruit clockgen)
-*****************************************/
-// Send a clock pulse of 2us length, 50% duty, 500kHz
-void pulseClock_N64(unsigned int times) {
-  for (unsigned int i = 0; i < (times * 2); i++) {
-    // Switch the clock pin to 0 if it's 1 and 0 if it's 1
-    PORTH ^= (1 << 1);
-    // without the delay the clock pulse would be 1.5us and 666kHz
-    //__asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t"));
-  }
-}
-
-// Send one byte of data to eeprom
-void sendData_CLK(byte data) {
-  for (byte i = 0; i < 8; i++) {
-    // pull data line low
-    N64_LOW;
-
-    // if current bit is 1, pull high after ~1us, 2 cycles
-    if (data >> 7) {
-      pulseClock_N64(2);
-      N64_HIGH;
-      pulseClock_N64(6);
-    }
-    // if current bit is 0 pull high after ~3us, 6 cycles
-    else {
-      pulseClock_N64(6);
-      N64_HIGH;
-      pulseClock_N64(2);
-    }
-
-    // rotate to the next bit
-    data <<= 1;
-  }
-}
-
-// Send stop bit to eeprom
-void sendStop_CLK() {
-  N64_LOW;
-  pulseClock_N64(2);
-  N64_HIGH;
-  pulseClock_N64(4);
-}
-
-// Capture 8 bytes in 64 bits into bit array tempBits
-void readData_CLK() {
-  for (byte i = 0; i < 64; i++) {
-
-    // pulse clock until we get response from eeprom
-    while (N64_QUERY) {
-      pulseClock_N64(1);
-    }
-
-    // Skip over the 1us low part of a high bit
-    pulseClock_N64(3);
-
-    // Read bit
-    tempBits[i] = N64_QUERY;
-
-    // wait for line to go high again
-    while (!N64_QUERY) {
-      pulseClock_N64(1);
-    }
-  }
-}
-
-// Write Eeprom to cartridge
-void writeEeprom_CLK() {
-  if ((saveType == 5) || (saveType == 6)) {
-
-    // Create filepath
-    sprintf(filePath, "%s/%s", filePath, fileName);
-    println_Msg(F("Writing..."));
-    println_Msg(filePath);
-    display_Update();
-
-    // Open file on sd card
-    if (myFile.open(filePath, O_READ)) {
-
-      for (byte i = 0; i < (eepPages / 64); i++) {
-        myFile.read(sdBuffer, 512);
-        // Disable interrupts for more uniform clock pulses
-        noInterrupts();
-
-        for (byte pageNumber = 0; pageNumber < 64; pageNumber++) {
-          // Blink led
-          blinkLED();
-
-          // Wait ~50ms between page writes or eeprom will have write errors
-          pulseClock_N64(26000);
-
-          // Send write command
-          sendData_CLK(0x05);
-          // Send page number
-          sendData_CLK(pageNumber + (i * 64));
-          // Send data to write
-          for (byte j = 0; j < 8; j++) {
-            sendData_CLK(sdBuffer[(pageNumber * 8) + j]);
-          }
-          sendStop_CLK();
-        }
-        interrupts();
-      }
-
-      // Close the file:
-      myFile.close();
-      println_Msg(F("Done"));
-      display_Update();
-      delay(600);
-    }
-    else {
-      print_Error(F("SD Error"), true);
-    }
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
-  }
-}
-
-// Dump Eeprom to SD
-void readEeprom_CLK() {
-  if ((saveType == 5) || (saveType == 6)) {
-
-    // Wait 50ms or eeprom might lock up
-    pulseClock_N64(26000);
-
-    // Get name, add extension and convert to char array for sd lib
-    strcpy(fileName, romName);
-    strcat(fileName, ".eep");
-
-    // create a new folder for the save file
-    EEPROM_readAnything(0, foldern);
-    sprintf(folder, "N64/SAVE/%s/%d", romName, foldern);
-    sd.mkdir(folder, true);
-    sd.chdir(folder);
-
-    // write new folder number back to eeprom
-    foldern = foldern + 1;
-    EEPROM_writeAnything(0, foldern);
-
-    // Open file on sd card
-    if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-      print_Error(F("Can't create file on SD"), true);
-    }
-
-    for (byte i = 0; i < (eepPages / 64); i++) {
-      // Disable interrupts for more uniform clock pulses
-      noInterrupts();
-
-      for (byte pageNumber = 0; pageNumber < 64; pageNumber++) {
-        // Blink led
-        blinkLED();
-
-        // Send read command
-        sendData_CLK(0x04);
-        // Send Page number
-        sendData_CLK(pageNumber + (i * 64));
-        // Send stop bit
-        sendStop_CLK();
-
-        // read data
-        readData_CLK();
-        sendStop_CLK();
-
-        // OR 8 bits into one byte for a total of 8 bytes
-        for (byte j = 0; j < 64; j += 8) {
-          sdBuffer[(pageNumber * 8) + (j / 8)] = tempBits[0 + j] << 7 | tempBits[1 + j] << 6 | tempBits[2 + j] << 5 | tempBits[3 + j] << 4 | tempBits[4 + j] << 3 | tempBits[5 + j] << 2 | tempBits[6 + j] << 1 | tempBits[7 + j];
-        }
-        // Wait 50ms between pages or eeprom might lock up
-        pulseClock_N64(26000);
-      }
-      interrupts();
-
-      // Write 64 pages at once to the SD card
-      myFile.write(sdBuffer, 512);
-    }
-    // Close the file:
-    myFile.close();
-    //clear the screen
-    display_Clear();
-    print_Msg(F("Saved to "));
-    print_Msg(folder);
-    println_Msg(F("/"));
-    display_Update();
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
-  }
-}
-
-// Check if a write succeeded, returns 0 if all is ok and number of errors if not
-unsigned long verifyEeprom_CLK() {
-  if ((saveType == 5) || (saveType == 6)) {
-    writeErrors = 0;
-
-    // Wait 50ms or eeprom might lock up
-    pulseClock_N64(26000);
-
-    display_Clear();
-    print_Msg(F("Verifying against "));
-    println_Msg(filePath);
-    display_Update();
-
-    // Open file on sd card
-    if (myFile.open(filePath, O_READ)) {
-
-      for (byte i = 0; i < (eepPages / 64); i++) {
-        // Disable interrupts for more uniform clock pulses
-        noInterrupts();
-
-        for (byte pageNumber = 0; pageNumber < 64; pageNumber++) {
-          // Blink led
-          blinkLED();
-
-          // Send read command
-          sendData_CLK(0x04);
-          // Send Page number
-          sendData_CLK(pageNumber + (i * 64));
-          // Send stop bit
-          sendStop_CLK();
-
-          // read data
-          readData_CLK();
-          sendStop_CLK();
-
-          // OR 8 bits into one byte for a total of 8 bytes
-          for (byte j = 0; j < 64; j += 8) {
-            sdBuffer[(pageNumber * 8) + (j / 8)] = tempBits[0 + j] << 7 | tempBits[1 + j] << 6 | tempBits[2 + j] << 5 | tempBits[3 + j] << 4 | tempBits[4 + j] << 3 | tempBits[5 + j] << 2 | tempBits[6 + j] << 1 | tempBits[7 + j];
-          }
-          // Wait 50ms between pages or eeprom might lock up
-          pulseClock_N64(26000);
-        }
-        interrupts();
-
-        // Check sdBuffer content against file on sd card
-        for (int c = 0; c < 512; c++) {
-          if (myFile.read() != sdBuffer[c]) {
-            writeErrors++;
-          }
-        }
-      }
-      // Close the file:
-      myFile.close();
-    }
-    else {
-      // SD Error
-      writeErrors = 999999;
-      print_Error(F("SD Error"), true);
-    }
-    // Return 0 if verified ok, or number of errors
-    return writeErrors;
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
-  }
-}
-
-/******************************************
-  Eeprom functions (with Adafruit clockgen)
-*****************************************/
-// Send one byte of data to eeprom
-void sendData(byte data) {
-  for (byte i = 0; i < 8; i++) {
-    // pull data line low
-    N64_LOW;
-
-    // if current bit is 1, pull high after ~1us
-    if (data >> 7) {
-      __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-      N64_HIGH;
-      __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-    }
-    // if current bit is 0 pull high after ~3us
-    else {
-      __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-      N64_HIGH;
-      __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-    }
-
-    // rotate to the next bit
-    data <<= 1;
-  }
-}
-
-// Send stop bit to eeprom
-void sendStop() {
-  N64_LOW;
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-  N64_HIGH;
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-}
-
-// Capture 8 bytes in 64 bits into bit array tempBits
-void readData() {
-  for (byte i = 0; i < 64; i++) {
-
-    // wait until we get response from eeprom
-    while (N64_QUERY) {
-    }
-
-    // Skip over the 1us low part of a high bit, Arduino running at 16Mhz -> one nop = 62.5ns
-    __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
-
-    // Read bit
-    tempBits[i] = N64_QUERY;
-
-    // wait for line to go high again
-    while (!N64_QUERY) {
-      __asm__("nop\n\t");
-    }
-  }
-}
-
 // Write Eeprom to cartridge
 void writeEeprom() {
   if ((saveType == 5) || (saveType == 6)) {
@@ -3085,46 +2174,61 @@ void writeEeprom() {
 
     // Open file on sd card
     if (myFile.open(filePath, O_READ)) {
+      // 2 command bytes and 8 data bytes
+      byte command[2 + 8];
+      command[0] = 0x05;
 
-      for (byte i = 0; i < (eepPages / 64); i++) {
-        myFile.read(sdBuffer, 512);
+      // Note: eepPages can be 256, so page must be able to get to 256 for the
+      // loop to exit. So it is not possible to use command[1] directly as loop
+      // counter.
+      for (int page = 0; page < eepPages; page++) {
+        command[1] = page;
+        // TODO: read 512 bytes in a 512 + 2 bytes buffer, and move the command start 32 bytes at a time
+        myFile.read(command + 2, sizeof(command) - 2);
         // Disable interrupts for more uniform clock pulses
+
+        // Blink led
+        blinkLED();
+        if (page)
+          delay(50);  // Wait 50ms between pages when writing
+
         noInterrupts();
-
-        for (byte pageNumber = 0; pageNumber < 64; pageNumber++) {
-          // Blink led
-          blinkLED();
-
-          // Wait ~50ms between page writes or eeprom will have write errors, Arduino running at 16Mhz -> one nop = 62.5ns
-          for (long i = 0; i < 115000; i++) {
-            __asm__("nop\n\t");
-          }
-
-          // Send write command
-          sendData(0x05);
-          // Send page number
-          sendData(pageNumber + (i * 64));
-          // Send data to write
-          for (byte j = 0; j < 8; j++) {
-            sendData(sdBuffer[(pageNumber * 8) + j]);
-          }
-          sendStop();
-        }
+        sendJoyBus(command, sizeof(command));
         interrupts();
       }
 
       // Close the file:
       myFile.close();
-      println_Msg(F("Done"));
+      print_STR(done_STR, 1);
       display_Update();
       delay(600);
+    } else {
+      print_FatalError(sd_error_STR);
     }
-    else {
-      print_Error(F("SD Error"), true);
-    }
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
-  else {
-    print_Error(F("Savetype Error"), true);
+}
+
+void readEepromPageList(byte* output, byte page_number, byte page_count) {
+  byte command[] = { 0x04, page_number };
+
+  // Disable interrupts for more uniform clock pulses
+  while (page_count--) {
+    // Blink led
+    blinkLED();
+
+    noInterrupts();
+    sendJoyBus(command, sizeof(command));
+    // XXX: is it possible to read more than 8 bytes at a time ?
+    recvJoyBus(output, 8);
+    interrupts();
+
+    if (page_count)
+      delayMicroseconds(600);  // wait 600us between pages when reading
+
+    command[1]++;
+    output += 8;
   }
 }
 
@@ -3132,12 +2236,11 @@ void writeEeprom() {
 void readEeprom() {
   if ((saveType == 5) || (saveType == 6)) {
     // Get name, add extension and convert to char array for sd lib
-    strcpy(fileName, romName);
-    strcat(fileName, ".eep");
+    snprintf_P(fileName, sizeof(fileName), N64_EEP_FILENAME_FMT, romName);
 
     // create a new folder for the save file
     EEPROM_readAnything(0, foldern);
-    sprintf(folder, "N64/SAVE/%s/%d", romName, foldern);
+    snprintf_P(folder, sizeof(folder), N64_SAVE_DIRNAME_FMT, romName, foldern);
     sd.mkdir(folder, true);
     sd.chdir(folder);
 
@@ -3147,41 +2250,13 @@ void readEeprom() {
 
     // Open file on sd card
     if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-      print_Error(F("Can't create file on SD"), true);
+      print_FatalError(create_file_STR);
     }
 
-    for (byte i = 0; i < (eepPages / 64); i++) {
-      // Disable interrupts for more uniform clock pulses
-      noInterrupts();
-
-      for (byte pageNumber = 0; pageNumber < 64; pageNumber++) {
-        // Blink led
-        blinkLED();
-
-        // Send read command
-        sendData(0x04);
-        // Send Page number
-        sendData(pageNumber + (i * 64));
-        // Send stop bit
-        sendStop();
-
-        // read data
-        readData();
-        sendStop();
-
-        // OR 8 bits into one byte for a total of 8 bytes
-        for (byte j = 0; j < 64; j += 8) {
-          sdBuffer[(pageNumber * 8) + (j / 8)] = tempBits[0 + j] << 7 | tempBits[1 + j] << 6 | tempBits[2 + j] << 5 | tempBits[3 + j] << 4 | tempBits[4 + j] << 3 | tempBits[5 + j] << 2 | tempBits[6 + j] << 1 | tempBits[7 + j];
-        }
-        // Wait ~600us between pages
-        for (int i = 0; i < 2000; i++) {
-          __asm__("nop\n\t");
-        }
-      }
-      interrupts();
-
+    for (int i = 0; i < eepPages; i += sizeof(sdBuffer) / 8) {
+      readEepromPageList(sdBuffer, i, sizeof(sdBuffer) / 8);
       // Write 64 pages at once to the SD card
-      myFile.write(sdBuffer, 512);
+      myFile.write(sdBuffer, sizeof(sdBuffer));
     }
     // Close the file:
     myFile.close();
@@ -3191,14 +2266,15 @@ void readEeprom() {
     print_Msg(folder);
     println_Msg(F("/"));
     display_Update();
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
 }
 
 // Check if a write succeeded, returns 0 if all is ok and number of errors if not
 unsigned long verifyEeprom() {
+  unsigned long writeErrors;
+
   if ((saveType == 5) || (saveType == 6)) {
     writeErrors = 0;
 
@@ -3209,39 +2285,10 @@ unsigned long verifyEeprom() {
 
     // Open file on sd card
     if (myFile.open(filePath, O_READ)) {
-
-      for (byte i = 0; i < (eepPages / 64); i++) {
-        // Disable interrupts for more uniform clock pulses
-        noInterrupts();
-
-        for (byte pageNumber = 0; pageNumber < 64; pageNumber++) {
-          // Blink led
-          blinkLED();
-
-          // Send read command
-          sendData(0x04);
-          // Send Page number
-          sendData(pageNumber + (i * 64));
-          // Send stop bit
-          sendStop();
-
-          // read data
-          readData();
-          sendStop();
-
-          // OR 8 bits into one byte for a total of 8 bytes
-          for (byte j = 0; j < 64; j += 8) {
-            sdBuffer[(pageNumber * 8) + (j / 8)] = tempBits[0 + j] << 7 | tempBits[1 + j] << 6 | tempBits[2 + j] << 5 | tempBits[3 + j] << 4 | tempBits[4 + j] << 3 | tempBits[5 + j] << 2 | tempBits[6 + j] << 1 | tempBits[7 + j];
-          }
-          // Wait ~600us between pages
-          for (int i = 0; i < 2000; i++) {
-            __asm__("nop\n\t");
-          }
-        }
-        interrupts();
-
+      for (int i = 0; i < eepPages; i += sizeof(sdBuffer) / 8) {
+        readEepromPageList(sdBuffer, i, sizeof(sdBuffer) / 8);
         // Check sdBuffer content against file on sd card
-        for (int c = 0; c < 512; c++) {
+        for (size_t c = 0; c < sizeof(sdBuffer); c++) {
           if (myFile.read() != sdBuffer[c]) {
             writeErrors++;
           }
@@ -3249,17 +2296,16 @@ unsigned long verifyEeprom() {
       }
       // Close the file:
       myFile.close();
-    }
-    else {
+    } else {
       // SD Error
       writeErrors = 999999;
-      print_Error(F("SD Error"), true);
+      print_FatalError(sd_error_STR);
     }
     // Return 0 if verified ok, or number of errors
     return writeErrors;
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
+    return 1;
   }
 }
 
@@ -3287,7 +2333,7 @@ void writeSram(unsigned long sramSize) {
 
         for (int c = 0; c < 512; c += 2) {
           // Join bytes to word
-          word myWord = ( ( sdBuffer[c] & 0xFF ) << 8 ) | ( sdBuffer[c + 1] & 0xFF );
+          word myWord = ((sdBuffer[c] & 0xFF) << 8) | (sdBuffer[c + 1] & 0xFF);
 
           // Write word
           writeWord_N64(myWord);
@@ -3295,16 +2341,14 @@ void writeSram(unsigned long sramSize) {
       }
       // Close the file:
       myFile.close();
-      println_Msg(F("Done"));
+      print_STR(done_STR, 1);
       display_Update();
-    }
-    else {
-      print_Error(F("SD Error"), true);
+    } else {
+      print_FatalError(sd_error_STR);
     }
 
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
 }
 
@@ -3322,12 +2366,10 @@ void readSram(unsigned long sramSize, byte flashramType) {
 
   if (saveType == 4) {
     strcat(fileName, ".fla");
-  }
-  else if (saveType == 1) {
+  } else if (saveType == 1) {
     strcat(fileName, ".sra");
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
 
   // create a new folder for the save file
@@ -3342,7 +2384,7 @@ void readSram(unsigned long sramSize, byte flashramType) {
 
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("SD Error"), true);
+    print_FatalError(sd_error_STR);
   }
 
   for (unsigned long currByte = sramBase; currByte < (sramBase + (sramSize / flashramType)); currByte += offset) {
@@ -3404,9 +2446,8 @@ unsigned long verifySram(unsigned long sramSize, byte flashramType) {
     }
     // Close the file:
     myFile.close();
-  }
-  else {
-    print_Error(F("SD Error"), true);
+  } else {
+    print_FatalError(sd_error_STR);
   }
   // Return 0 if verified ok, or number of errors
   return writeErrors;
@@ -3416,7 +2457,7 @@ unsigned long verifySram(unsigned long sramSize, byte flashramType) {
   Flashram functions
 *****************************************/
 // Send a command to the flashram command register
-void sendFramCmd (unsigned long myCommand) {
+void sendFramCmd(unsigned long myCommand) {
   // Split command into two words
   word myComLowOut = myCommand & 0xFFFF;
   word myComHighOut = myCommand >> 16;
@@ -3450,8 +2491,7 @@ void writeFram(byte flashramType) {
     if (blankcheck_N64(flashramType) == 0) {
       println_Msg(F("OK"));
       display_Update();
-    }
-    else {
+    } else {
       println_Msg(F("FAIL"));
       display_Update();
     }
@@ -3489,7 +2529,7 @@ void writeFram(byte flashramType) {
           // Send 128 bytes, 64 words
           for (byte c = 0; c < 128; c += 2) {
             // Join two bytes into one word
-            word myWord = ( ( sdBuffer[c] & 0xFF ) << 8 ) | ( sdBuffer[c + 1] & 0xFF );
+            word myWord = ((sdBuffer[c] & 0xFF) << 8) | (sdBuffer[c + 1] & 0xFF);
             // Write word
             writeWord_N64(myWord);
           }
@@ -3512,13 +2552,11 @@ void writeFram(byte flashramType) {
       println_Msg("");
       // Close the file:
       myFile.close();
+    } else {
+      print_FatalError(sd_error_STR);
     }
-    else {
-      print_Error(F("SD Error"), true);
-    }
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
 }
 
@@ -3545,9 +2583,8 @@ void eraseFram() {
         delay(1);
       }
     }
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
 }
 
@@ -3559,9 +2596,8 @@ void readFram(byte flashramType) {
     sendFramCmd(0xF0000000);
     // Read Flashram
     readSram(131072, flashramType);
-  }
-  else {
-    print_Error(F("Savetype Error"), true);
+  } else {
+    print_FatalError(F("Savetype Error"));
   }
 }
 
@@ -3618,9 +2654,9 @@ unsigned long blankcheck_N64(byte flashramType) {
 // Wait until current operation is done
 byte waitForFram(byte flashramType) {
   byte framStatus = 0;
-  byte statusMXL1100[] = {0x11, 0x11, 0x80, 0x01, 0x00, 0xC2, 0x00, 0x1E};
-  byte statusMXL1101[] = {0x11, 0x11, 0x80, 0x01, 0x00, 0xC2, 0x00, 0x1D};
-  byte statusMN63F81[] = {0x11, 0x11, 0x80, 0x01, 0x00, 0x32, 0x00, 0xF1};
+  byte statusMXL1100[] = { 0x11, 0x11, 0x80, 0x01, 0x00, 0xC2, 0x00, 0x1E };
+  byte statusMXL1101[] = { 0x11, 0x11, 0x80, 0x01, 0x00, 0xC2, 0x00, 0x1D };
+  byte statusMN63F81[] = { 0x11, 0x11, 0x80, 0x01, 0x00, 0x32, 0x00, 0xF1 };
 
   // FRAM_STATUS_MODE_CMD
   sendFramCmd(0xE1000000);
@@ -3647,8 +2683,7 @@ byte waitForFram(byte flashramType) {
         framStatus = 1;
       }
     }
-  }
-  else if (flashramType == 1) {
+  } else if (flashramType == 1) {
     //MX29L1101
     if (MN63F81MPN == false) {
       for (byte c = 0; c < 8; c++) {
@@ -3691,27 +2726,27 @@ void getFramType() {
     sdBuffer[c + 1] = loByte;
   }
   //MX29L1100
-  if (sdBuffer[7] == 0x1e ) {
+  if (sdBuffer[7] == 0x1e) {
     flashramType = 2;
     println_Msg(F("Type: MX29L1100"));
     display_Update();
   }
   //MX29L1101
-  else if (sdBuffer[7] == 0x1d )  {
+  else if (sdBuffer[7] == 0x1d) {
     flashramType = 1;
     MN63F81MPN = false;
     println_Msg(F("Type: MX29L1101"));
     display_Update();
   }
   //MN63F81MPN
-  else if (sdBuffer[7] == 0xf1 )  {
+  else if (sdBuffer[7] == 0xf1) {
     flashramType = 1;
     MN63F81MPN = true;
     println_Msg(F("Type: MN63F81MPN"));
     display_Update();
   }
   // 29L1100KC-15B0 compat MX29L1101
-  else if ((sdBuffer[7] == 0x8e ) || (sdBuffer[7] == 0x84 )) {
+  else if ((sdBuffer[7] == 0x8e) || (sdBuffer[7] == 0x84)) {
     flashramType = 1;
     MN63F81MPN = false;
     println_Msg(F("Type: 29L1100KC-15B0"));
@@ -3724,7 +2759,7 @@ void getFramType() {
       print_Msg(sdBuffer[c], HEX);
       print_Msg(F(", "));
     }
-    print_Error(F("Flashram unknown"), true);
+    print_FatalError(F("Flashram unknown"));
   }
 }
 
@@ -3745,7 +2780,7 @@ redumpnewfolder:
   sd.chdir(folder);
 
   display_Clear();
-  print_Msg(F("Saving to "));
+  print_STR(saving_to_STR, 0);
   print_Msg(folder);
   println_Msg(F("/..."));
   display_Update();
@@ -3757,33 +2792,28 @@ redumpnewfolder:
 redumpsamefolder:
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("SD Error"), true);
+    print_FatalError(sd_error_STR);
   }
 
-  // dumping rom slow
-#ifndef fastcrc
   // get current time
   unsigned long startTime = millis();
+#ifndef fastcrc
+  // dumping rom slow
 
   for (unsigned long currByte = romBase; currByte < (romBase + (cartSize * 1024 * 1024)); currByte += 512) {
     // Blink led
-    if (currByte % 16384 == 0)
+    if ((currByte & 0x3FFF) == 0)
       blinkLED();
 
     // Set the address for the next 512 bytes
     setAddress_N64(currByte);
 
-    for (int c = 0; c < 512; c += 2) {
-      // split word
+    for (word c = 0; c < sizeof(sdBuffer); c += 2) {
       word myWord = readWord_N64();
-      byte loByte = myWord & 0xFF;
-      byte hiByte = myWord >> 8;
-
-      // write to buffer
-      sdBuffer[c] = hiByte;
-      sdBuffer[c + 1] = loByte;
+      sdBuffer[c] = myWord >> 8;
+      sdBuffer[c + 1] = myWord & 0xFF;
     }
-    myFile.write(sdBuffer, 512);
+    myFile.write(sdBuffer, sizeof(sdBuffer));
   }
   // Close the file:
   myFile.close();
@@ -3791,20 +2821,15 @@ redumpsamefolder:
   if (compareCRC("n64.txt", 0, 1, 0)) {
 #else
   // dumping rom fast
-  byte buffer[1024] = { 0 };
-
-  // get current time
-  unsigned long startTime = millis();
+  byte buffer[1024];
 
   //Initialize progress bar
   uint32_t processedProgressBar = 0;
-  uint32_t totalProgressBar = (uint32_t)(cartSize) * 1024 * 1024;
+  uint32_t totalProgressBar = (uint32_t)(cartSize)*1024 * 1024;
   draw_progressbar(0, totalProgressBar);
 
   // prepare crc32
   uint32_t oldcrc32 = 0xFFFFFFFF;
-  uint32_t tab_value = 0;
-  uint8_t idx = 0;
 
   // run combined dumper + crc32 routine for better performance, as N64 ROMs are quite large for an 8bit micro
   // currently dumps + checksums a 32MB cart in 170 seconds (down from 347 seconds)
@@ -3822,22 +2847,22 @@ redumpsamefolder:
       // Pull read(PH6) low
       PORTH &= ~(1 << 6);
       // Wait ~310ns
-      NOP; NOP; NOP; NOP; NOP;
+      NOP;
+      NOP;
+      NOP;
+      NOP;
+      NOP;
 
       // data on PINK and PINF is valid now, read into sd card buffer
-      buffer[c] =     PINK; // hiByte
-      buffer[c + 1] = PINF; // loByte
+      buffer[c] = PINK;      // hiByte
+      buffer[c + 1] = PINF;  // loByte
 
       // Pull read(PH6) high
       PORTH |= (1 << 6);
 
       // crc32 update
-      idx = ((oldcrc32) ^ (buffer[c]));
-      tab_value = pgm_read_dword(crc_32_tab + idx);
-      oldcrc32 = tab_value ^ ((oldcrc32) >> 8);
-      idx = ((oldcrc32) ^ (buffer[c + 1]));
-      tab_value = pgm_read_dword(crc_32_tab + idx);
-      oldcrc32 = tab_value ^ ((oldcrc32) >> 8);
+      UPDATE_CRC(oldcrc32, buffer[c]);
+      UPDATE_CRC(oldcrc32, buffer[c + 1]);
     }
 
     // Set the address for the next 512 bytes to dump
@@ -3849,22 +2874,22 @@ redumpsamefolder:
       // Pull read(PH6) low
       PORTH &= ~(1 << 6);
       // Wait ~310ns
-      NOP; NOP; NOP; NOP; NOP;
+      NOP;
+      NOP;
+      NOP;
+      NOP;
+      NOP;
 
       // data on PINK and PINF is valid now, read into sd card buffer
-      buffer[c] =     PINK; // hiByte
-      buffer[c + 1] = PINF; // loByte
+      buffer[c] = PINK;      // hiByte
+      buffer[c + 1] = PINF;  // loByte
 
       // Pull read(PH6) high
       PORTH |= (1 << 6);
 
       // crc32 update
-      idx = ((oldcrc32) ^ (buffer[c])) & 0xff;
-      tab_value = pgm_read_dword(crc_32_tab + idx);
-      oldcrc32 = tab_value ^ ((oldcrc32) >> 8);
-      idx = ((oldcrc32) ^ (buffer[c + 1])) & 0xff;
-      tab_value = pgm_read_dword(crc_32_tab + idx);
-      oldcrc32 = tab_value ^ ((oldcrc32) >> 8);
+      UPDATE_CRC(oldcrc32, buffer[c]);
+      UPDATE_CRC(oldcrc32, buffer[c + 1]);
     }
 
     processedProgressBar += 1024;
@@ -3883,12 +2908,13 @@ redumpsamefolder:
   // Search n64.txt for crc
   if (compareCRC("n64.txt", crcStr, 1, 0)) {
 #endif
-    unsigned long timeElapsed = (millis() - startTime) / 1000; // seconds
+    unsigned long timeElapsed = (millis() - startTime) / 1000;  // seconds
     print_Msg(F("Done ("));
-    print_Msg(timeElapsed); // include elapsed time
+    print_Msg(timeElapsed);  // include elapsed time
     println_Msg(F("s)"));
     println_Msg(F(""));
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     // This saves a tt file with rom info next to the dumped rom
 #ifdef savesummarytotxt
@@ -3898,13 +2924,13 @@ redumpsamefolder:
     save_log();
 #endif
     wait();
-  }
-  else {
+  } else {
     // Dump was bad or unknown
     errorLvl = 1;
     setColor_RGB(255, 0, 0);
     println_Msg(F(""));
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     // This saves a tt file with rom info next to the dumped rom
 #ifdef savesummarytotxt
@@ -3920,8 +2946,7 @@ redumpsamefolder:
     CRCMenu = question_box(F("Redump cartridge?"), menuOptions, 4, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (CRCMenu)
-    {
+    switch (CRCMenu) {
       case 0:
         // Return to N64 menu
         display_Clear();
@@ -3940,10 +2965,10 @@ redumpsamefolder:
         sd.chdir(folder);
         // Delete old file
         if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-          print_Error(F("SD Error"), true);
+          print_FatalError(sd_error_STR);
         }
         if (!myFile.remove()) {
-          print_Error(F("Delete Error"), true);
+          print_FatalError(F("Delete Error"));
         }
         // Dump again
         display_Clear();
@@ -3966,7 +2991,7 @@ redumpsamefolder:
 void savesummary_N64(boolean checkfound, char crcStr[9], unsigned long timeElapsed) {
   // Open file on sd card
   if (!myFile.open("N64/ROM/n64log.txt", O_RDWR | O_CREAT | O_APPEND)) {
-    print_Error(F("SD Error"), true);
+    print_FatalError(sd_error_STR);
   }
 
   //Write the info
@@ -4024,8 +3049,7 @@ void savesummary_N64(boolean checkfound, char crcStr[9], unsigned long timeElaps
     // Dump was a known good rom
     // myFile.println(F("Checksum matches"));
     myFile.println(" [Match]");
-  }
-  else {
+  } else {
     // myFile.println(F("Checksum not found"));
     myFile.println(" [No Match]");
   }
@@ -4044,46 +3068,42 @@ void savesummary_N64(boolean checkfound, char crcStr[9], unsigned long timeElaps
    N64 Repro Flashrom Functions
  *****************************************/
 void flashRepro_N64() {
-  unsigned long sectorSize;
-  byte bufferSize;
+  unsigned long sectorSize = 0;
+  byte bufferSize = 0;
   // Check flashrom ID's
   idFlashrom_N64();
 
   // If the ID is known continue
   if (cartSize != 0) {
     // Print flashrom name
-    if ((strcmp(flashid, "227E") == 0)  && (strcmp(cartID, "2201") == 0)) {
+    if ((flashid == 0x227E) && (strcmp(cartID, "2201") == 0)) {
       print_Msg(F("Spansion S29GL256N"));
       if (cartSize == 64)
         println_Msg(F(" x2"));
       else
         println_Msg("");
-    }
-    else if ((strcmp(flashid, "227E") == 0)  && (strcmp(cartID, "2101") == 0)) {
+    } else if ((flashid == 0x227E) && (strcmp(cartID, "2101") == 0)) {
       print_Msg(F("Spansion S29GL128N"));
-    }
-    else if ((strcmp(flashid, "227E") == 0)  && (strcmp(cartID, "2100") == 0)) {
+    } else if ((flashid == 0x227E) && (strcmp(cartID, "2100") == 0)) {
       print_Msg(F("ST M29W128GL"));
-    }
-    else if ((strcmp(flashid, "22C9") == 0) || (strcmp(flashid, "22CB") == 0)) {
+    } else if ((flashid == 0x22C9) || (flashid == 0x22CB)) {
       print_Msg(F("Macronix MX29LV640"));
       if (cartSize == 16)
         println_Msg(F(" x2"));
       else
         println_Msg("");
-    }
-    else if (strcmp(flashid, "8816") == 0)
+    } else if (flashid == 0x8816)
       println_Msg(F("Intel 4400L0ZDQ0"));
-    else if (strcmp(flashid, "7E7E") == 0)
+    else if (flashid == 0x7E7E)
       println_Msg(F("Fujitsu MSP55LV100S"));
-    else if ((strcmp(flashid, "227E") == 0) && (strcmp(cartID, "2301") == 0))
+    else if ((flashid == 0x227E) && (strcmp(cartID, "2301") == 0))
       println_Msg(F("Fujitsu MSP55LV512"));
-    else if ((strcmp(flashid, "227E") == 0) && (strcmp(cartID, "3901") == 0))
+    else if ((flashid == 0x227E) && (strcmp(cartID, "3901") == 0))
       println_Msg(F("Intel 512M29EW"));
 
     // Print info
     print_Msg(F("ID: "));
-    print_Msg(flashid);
+    print_Msg(flashid_str);
     print_Msg(F(" Size: "));
     print_Msg(cartSize);
     println_Msg(F("MB"));
@@ -4092,16 +3112,16 @@ void flashRepro_N64() {
     println_Msg(F("Repro Cartridge."));
     println_Msg(F("Attention: Use 3.3V!"));
     println_Msg("");
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     wait();
-  }
-  else {
+  } else {
     println_Msg(F("Unknown flashrom"));
     print_Msg(F("ID: "));
     print_Msg(vendorID);
     print_Msg(F(" "));
-    print_Msg(flashid);
+    print_Msg(flashid_str);
     print_Msg(F(" "));
     println_Msg(cartID);
     println_Msg(F(" "));
@@ -4115,7 +3135,8 @@ void flashRepro_N64() {
 
     // clear IDs
     sprintf(vendorID, "%s", "CONF");
-    sprintf(flashid, "%s", "CONF");
+    flashid = 0;
+    sprintf(flashid_str, "%s", "CONF");
     sprintf(cartID, "%s", "CONF");
 
 
@@ -4127,8 +3148,7 @@ void flashRepro_N64() {
     N64RomMenu = question_box(F("Select flash size"), menuOptions, 6, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (N64RomMenu)
-    {
+    switch (N64RomMenu) {
       case 0:
         // 4MB
         cartSize = 4;
@@ -4167,8 +3187,7 @@ void flashRepro_N64() {
     N64BufferMenu = question_box(F("Select buffer size"), menuOptions, 4, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (N64BufferMenu)
-    {
+    switch (N64BufferMenu) {
       case 0:
         // no buffer
         bufferSize = 0;
@@ -4197,8 +3216,7 @@ void flashRepro_N64() {
     N64SectorMenu = question_box(F("Select sector size"), menuOptions, 4, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (N64SectorMenu)
-    {
+    switch (N64SectorMenu) {
       case 0:
         // 8KB sectors
         sectorSize = 0x2000;
@@ -4242,28 +3260,24 @@ void flashRepro_N64() {
 
     // Compare file size to flashrom size
     if ((fileSize / 1048576) > cartSize) {
-      print_Error(F("File too big"), true);
+      print_FatalError(file_too_big_STR);
     }
 
     // Erase needed sectors
-    if (strcmp(flashid, "227E") == 0) {
+    if (flashid == 0x227E) {
       // Spansion S29GL256N or Fujitsu MSP55LV512 with 0x20000 sector size and 32 byte buffer
       eraseSector_N64(0x20000);
-    }
-    else if (strcmp(flashid, "7E7E") == 0) {
+    } else if (flashid == 0x7E7E) {
       // Fujitsu MSP55LV100S
       eraseMSP55LV100_N64();
-    }
-    else if ((strcmp(flashid, "8813") == 0) || (strcmp(flashid, "8816") == 0)) {
+    } else if ((flashid == 0x8813) || (flashid == 0x8816)) {
       // Intel 4400L0ZDQ0
       eraseIntel4400_N64();
       resetIntel4400_N64();
-    }
-    else if ((strcmp(flashid, "22C9") == 0) || (strcmp(flashid, "22CB") == 0)) {
+    } else if ((flashid == 0x22C9) || (flashid == 0x22CB)) {
       // Macronix MX29LV640, C9 is top boot and CB is bottom boot block
       eraseSector_N64(0x8000);
-    }
-    else {
+    } else {
       eraseFlashrom_N64();
     }
 
@@ -4275,66 +3289,61 @@ void flashRepro_N64() {
       println_Msg(filePath);
       display_Update();
 
-      if ((strcmp(cartID, "3901") == 0) && (strcmp(flashid, "227E") == 0)) {
+      if ((strcmp(cartID, "3901") == 0) && (flashid == 0x227E)) {
         // Intel 512M29EW(64MB) with 0x20000 sector size and 128 byte buffer
         writeFlashBuffer_N64(0x20000, 128);
-      }
-      else if ((strcmp(cartID, "2100") == 0) && (strcmp(flashid, "227E") == 0)) {
+      } else if ((strcmp(cartID, "2100") == 0) && (flashid == 0x227E)) {
         // ST M29W128GH(16MB) with 0x20000 sector size and 64 byte buffer
         writeFlashBuffer_N64(0x20000, 64);
-      }
-      else if (strcmp(flashid, "227E") == 0) {
+      } else if (flashid == 0x227E) {
         // Spansion S29GL128N/S29GL256N or Fujitsu MSP55LV512 with 0x20000 sector size and 32 byte buffer
         writeFlashBuffer_N64(0x20000, 32);
-      }
-      else if (strcmp(flashid, "7E7E") == 0) {
+      } else if (flashid == 0x7E7E) {
         //Fujitsu MSP55LV100S
         writeMSP55LV100_N64(0x20000);
-      }
-      else if ((strcmp(flashid, "22C9") == 0) || (strcmp(flashid, "22CB") == 0)) {
+      } else if ((flashid == 0x22C9) || (flashid == 0x22CB)) {
         // Macronix MX29LV640 without buffer and 0x8000 sector size
         writeFlashrom_N64(0x8000);
-      }
-      else if ((strcmp(flashid, "8813") == 0) || (strcmp(flashid, "8816") == 0)) {
+      } else if ((flashid == 0x8813) || (flashid == 0x8816)) {
         // Intel 4400L0ZDQ0
         writeIntel4400_N64();
         resetIntel4400_N64();
-      }
-      else if (bufferSize == 0) {
-        writeFlashrom_N64(sectorSize);
-      }
-      else {
-        writeFlashBuffer_N64(sectorSize, bufferSize);
+      } else if (sectorSize) {
+        if (bufferSize) {
+          writeFlashBuffer_N64(sectorSize, bufferSize);
+        } else {
+          writeFlashrom_N64(sectorSize);
+        }
+      } else {
+        print_FatalError(F("sectorSize not set"));
       }
 
       // Close the file:
       myFile.close();
 
       // Verify
-      print_Msg(F("Verifying..."));
+      print_STR(verifying_STR, 0);
       display_Update();
       writeErrors = verifyFlashrom_N64();
       if (writeErrors == 0) {
         println_Msg(F("OK"));
         display_Update();
-      }
-      else {
+      } else {
         print_Msg(writeErrors);
         print_Msg(F(" bytes "));
-        print_Error(F("did not verify."), false);
+        print_Error(did_not_verify_STR);
       }
-    }
-    else {
+    } else {
       // Close the file
       myFile.close();
-      print_Error(F("failed"), false);
+      print_Error(F("failed"));
     }
-  }
-  else {
-    print_Error(F("Can't open file"), false);
+  } else {
+    print_Error(F("Can't open file"));
   }
 
-  println_Msg(F("Press Button..."));
+  // Prints string out of the common strings array either with or without newline
+  print_STR(press_button_STR, 1);
   display_Update();
   wait();
   display_Clear();
@@ -4381,13 +3390,14 @@ void idFlashrom_N64() {
   setAddress_N64(romBase);
   sprintf(vendorID, "%02X", readWord_N64());
   // Read 2 bytes flashrom ID
-  sprintf(flashid, "%04X", readWord_N64());
+  flashid = readWord_N64();
+  sprintf(flashid_str, "%04X", flashid);
   // Read 2 bytes secondary flashrom ID
   setAddress_N64(romBase + 0x1C);
-  sprintf(cartID, "%04X", ((readWord_N64() << 8)  | (readWord_N64() & 0xFF)));
+  sprintf(cartID, "%04X", ((readWord_N64() << 8) | (readWord_N64() & 0xFF)));
 
   // Spansion S29GL256N(32MB/64MB) with either one or two flashrom chips
-  if ((strcmp(cartID, "2201") == 0) && (strcmp(flashid, "227E") == 0)) {
+  if ((strcmp(cartID, "2201") == 0) && (flashid == 0x227E)) {
     cartSize = 32;
 
     // Reset flashrom
@@ -4409,14 +3419,14 @@ void idFlashrom_N64() {
     sprintf(tempID, "%04X", readWord_N64());
 
     // Check if second flashrom chip is present
-    if (strcmp(tempID, "227E") == 0)  {
+    if (strcmp(tempID, "227E") == 0) {
       cartSize = 64;
     }
     resetFlashrom_N64(romBase + 0x2000000);
   }
 
   // Macronix MX29LV640(8MB/16MB) with either one or two flashrom chips
-  else if ((strcmp(flashid, "22C9") == 0) || (strcmp(flashid, "22CB") == 0)) {
+  else if ((flashid == 0x22C9) || (flashid == 0x22CB)) {
     cartSize = 8;
 
     resetFlashrom_N64(romBase + 0x800000);
@@ -4444,7 +3454,7 @@ void idFlashrom_N64() {
   }
 
   // Intel 4400L0ZDQ0 (64MB)
-  else if (strcmp(flashid, "8816") == 0) {
+  else if (flashid == 0x8816) {
     // Found first flashrom chip, set to 32MB
     cartSize = 32;
     resetIntel4400_N64();
@@ -4464,7 +3474,8 @@ void idFlashrom_N64() {
     sprintf(cartID, "%04X", readWord_N64());
     if (strcmp(cartID, "8813") == 0) {
       cartSize = 64;
-      strncpy(flashid , cartID, 5);
+      flashid = 0x8813;
+      strncpy(flashid_str, cartID, 5);
     }
     resetIntel4400_N64();
     // Empty cartID string
@@ -4472,42 +3483,42 @@ void idFlashrom_N64() {
   }
 
   //Fujitsu MSP55LV512/Spansion S29GL512N (64MB)
-  else if ((strcmp(cartID, "2301") == 0) && (strcmp(flashid, "227E") == 0)) {
+  else if ((strcmp(cartID, "2301") == 0) && (flashid == 0x227E)) {
     cartSize = 64;
     // Reset flashrom
     resetFlashrom_N64(romBase);
   }
 
   // Spansion S29GL128N(16MB) with one flashrom chip
-  else if ((strcmp(cartID, "2101") == 0) && (strcmp(flashid, "227E") == 0)) {
+  else if ((strcmp(cartID, "2101") == 0) && (flashid == 0x227E)) {
     cartSize = 16;
     // Reset flashrom
     resetFlashrom_N64(romBase);
   }
 
   // ST M29W128GL(16MB) with one flashrom chip
-  else if ((strcmp(cartID, "2100") == 0) && (strcmp(flashid, "227E") == 0)) {
+  else if ((strcmp(cartID, "2100") == 0) && (flashid == 0x227E)) {
     cartSize = 16;
     // Reset flashrom
     resetFlashrom_N64(romBase);
   }
 
   // Intel 512M29EW(64MB) with one flashrom chip
-  else if ((strcmp(cartID, "3901") == 0) && (strcmp(flashid, "227E") == 0)) {
+  else if ((strcmp(cartID, "3901") == 0) && (flashid == 0x227E)) {
     cartSize = 64;
     // Reset flashrom
     resetFlashrom_N64(romBase);
   }
 
   // Unknown 227E type
-  else if (strcmp(flashid, "227E") == 0) {
+  else if (flashid == 0x227E) {
     cartSize = 0;
     // Reset flashrom
     resetFlashrom_N64(romBase);
   }
 
   //Test for Fujitsu MSP55LV100S (64MB)
-  else  {
+  else {
     // Send flashrom ID command
     setAddress_N64(romBase + (0x555 << 1));
     writeWord_N64(0xAAAA);
@@ -4525,11 +3536,12 @@ void idFlashrom_N64() {
     if (strcmp(cartID, "7E7E") == 0) {
       resetMSP55LV100_N64(romBase);
       cartSize = 64;
-      strncpy(flashid , cartID, 5);
+      flashid = 0x7E7E;
+      strncpy(flashid_str, cartID, 5);
     }
   }
-  if ((strcmp(flashid, "1240") == 0) && (strcmp(cartID, "1240") == 0)) {
-    print_Error(F("Please reseat cartridge"), true);
+  if ((flashid == 0x1240) && (strcmp(cartID, "1240") == 0)) {
+    print_FatalError(F("Please reseat cartridge"));
   }
 }
 
@@ -4733,12 +3745,12 @@ void eraseSector_N64(unsigned long sectorSize) {
     blinkLED();
 
     // Spansion S29GL256N(32MB/64MB) with two flashrom chips
-    if ((currSector == 0x2000000) && (strcmp(cartID, "2201") == 0) && (strcmp(flashid, "227E") == 0)) {
+    if ((currSector == 0x2000000) && (strcmp(cartID, "2201") == 0) && (flashid == 0x227E)) {
       // Change to second chip
       flashBase = romBase + 0x2000000;
     }
     // Macronix MX29LV640(8MB/16MB) with two flashrom chips
-    else if ((currSector == 0x800000) && ((strcmp(flashid, "22C9") == 0) || (strcmp(flashid, "22CB") == 0))) {
+    else if ((currSector == 0x800000) && ((flashid == 0x22C9) || (flashid == 0x22CB))) {
       flashBase = romBase + 0x800000;
     }
 
@@ -4816,7 +3828,7 @@ void writeIntel4400_N64() {
         // Write buffer
         for (byte currByte = 0; currByte < 64; currByte += 2) {
           // Join two bytes into one word
-          word currWord = ( ( sdBuffer[currWriteBuffer + currByte] & 0xFF ) << 8 ) | ( sdBuffer[currWriteBuffer + currByte + 1] & 0xFF );
+          word currWord = ((sdBuffer[currWriteBuffer + currByte] & 0xFF) << 8) | (sdBuffer[currWriteBuffer + currByte + 1] & 0xFF);
           setAddress_N64(romBase + currSector + currSdBuffer + currWriteBuffer + currByte);
           writeWord_N64(currWord);
         }
@@ -4870,7 +3882,7 @@ void writeMSP55LV100_N64(unsigned long sectorSize) {
 
         for (byte currByte = 0; currByte < 32; currByte += 2) {
           // Join two bytes into one word
-          currWord = ( ( sdBuffer[currWriteBuffer + currByte] & 0xFF ) << 8 ) | ( sdBuffer[currWriteBuffer + currByte + 1] & 0xFF );
+          currWord = ((sdBuffer[currWriteBuffer + currByte] & 0xFF) << 8) | (sdBuffer[currWriteBuffer + currByte + 1] & 0xFF);
 
           // Load Buffer Words
           setAddress_N64(romBase + currSector + currSdBuffer + currWriteBuffer + currByte);
@@ -4928,11 +3940,11 @@ void writeFlashBuffer_N64(unsigned long sectorSize, byte bufferSize) {
         writeWord_N64((bufferSize / 2) - 1);
 
         // Define variable before loop so we can use it later when reading the status register
-        word currWord;
+        word currWord = 0;
 
         for (byte currByte = 0; currByte < bufferSize; currByte += 2) {
           // Join two bytes into one word
-          currWord = ( ( sdBuffer[currWriteBuffer + currByte] & 0xFF ) << 8 ) | ( sdBuffer[currWriteBuffer + currByte + 1] & 0xFF );
+          currWord = ((sdBuffer[currWriteBuffer + currByte] & 0xFF) << 8) | (sdBuffer[currWriteBuffer + currByte + 1] & 0xFF);
 
           // Load Buffer Words
           setAddress_N64(romBase + currSector + currSdBuffer + currWriteBuffer + currByte);
@@ -4974,7 +3986,7 @@ void writeFlashrom_N64(unsigned long sectorSize) {
       myFile.read(sdBuffer, 512);
       for (int currByte = 0; currByte < 512; currByte += 2) {
         // Join two bytes into one word
-        word currWord = ( ( sdBuffer[currByte] & 0xFF ) << 8 ) | ( sdBuffer[currByte + 1] & 0xFF );
+        word currWord = ((sdBuffer[currByte] & 0xFF) << 8) | (sdBuffer[currByte + 1] & 0xFF);
         // 2 unlock commands
         setAddress_N64(flashBase + (0x555 << 1));
         writeWord_N64(0xAA);
@@ -5012,7 +4024,7 @@ unsigned long verifyFlashrom_N64() {
         myFile.read(sdBuffer, 512);
         for (int currByte = 0; currByte < 512; currByte += 2) {
           // Join two bytes into one word
-          word currWord = ( ( sdBuffer[currByte] & 0xFF ) << 8 ) | ( sdBuffer[currByte + 1] & 0xFF );
+          word currWord = ((sdBuffer[currByte] & 0xFF) << 8) | (sdBuffer[currByte + 1] & 0xFF);
           // Read flash
           setAddress_N64(romBase + currSector + currSdBuffer + currByte);
           // Compare both
@@ -5032,9 +4044,8 @@ unsigned long verifyFlashrom_N64() {
     // Close the file:
     myFile.close();
     return writeErrors;
-  }
-  else {
-    println_Msg(F("Can't open file"));
+  } else {
+    print_STR(open_file_STR, 1);
     display_Update();
     return 9999;
   }
@@ -5056,14 +4067,15 @@ void flashGameshark_N64() {
   // !!!! SST 29EE010 may have a 5V requirement for writing however dumping works at 3V. As such it is not !!!!
   // !!!!        advised to write to a cart with this chip until further testing can be completed.         !!!!
 
-  if (strcmp(flashid, "0808") == 0 || strcmp(flashid, "0404") == 0 || strcmp(flashid, "3535") == 0 || strcmp(flashid, "0707") == 0) {
+  if (flashid == 0x0808 || flashid == 0x0404 || flashid == 0x3535 || flashid == 0x0707) {
     backupGameshark_N64();
     println_Msg("");
     println_Msg(F("This will erase your"));
     println_Msg(F("Gameshark cartridge"));
     println_Msg(F("Attention: Use 3.3V!"));
     println_Msg(F("Power OFF if Unsure!"));
-    println_Msg(F("Press Button..."));
+    // Prints string out of the common strings array either with or without newline
+    print_STR(press_button_STR, 1);
     display_Update();
     wait();
 
@@ -5088,7 +4100,7 @@ void flashGameshark_N64() {
 
       // Compare file size to flashrom size
       if (fileSize > 262144) {
-        print_Error(F("File too big"), true);
+        print_FatalError(file_too_big_STR);
       }
 
       // SST 29LE010, chip erase not needed as this eeprom automaticly erases during the write cycle
@@ -5104,7 +4116,7 @@ void flashGameshark_N64() {
       myFile.close();
 
       // Verify
-      print_Msg(F("Verifying..."));
+      print_STR(verifying_STR, 0);
       display_Update();
       writeErrors = verifyGameshark_N64();
 
@@ -5113,26 +4125,26 @@ void flashGameshark_N64() {
         println_Msg(F(""));
         println_Msg(F("Turn Cart Reader off now"));
         display_Update();
-        while (1);
-      }
-      else {
+        while (1)
+          ;
+      } else {
         print_Msg(writeErrors);
         print_Msg(F(" bytes "));
-        print_Error(F("did not verify."), false);
+        print_Error(did_not_verify_STR);
       }
-    }
-    else {
-      print_Error(F("Can't open file"), false);
+    } else {
+      print_Error(F("Can't open file"));
     }
   }
   // If the ID is unknown show error message
   else {
     print_Msg(F("ID: "));
-    println_Msg(flashid);
-    print_Error(F("Unknown flashrom"), false);
+    println_Msg(flashid_str);
+    print_Error(F("Unknown flashrom"));
   }
 
-  println_Msg(F("Press Button..."));
+  // Prints string out of the common strings array either with or without newline
+  print_STR(press_button_STR, 1);
   display_Update();
   wait();
   display_Clear();
@@ -5154,7 +4166,8 @@ void idGameshark_N64() {
   // Read 1 byte vendor ID
   readWord_N64();
   // Read 2 bytes flashrom ID
-  sprintf(flashid, "%04X", readWord_N64());
+  flashid = readWord_N64();
+  sprintf(flashid_str, "%04X", flashid);
   // Reset flashrom
   resetGameshark_N64();
 }
@@ -5192,7 +4205,7 @@ void backupGameshark_N64() {
 
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("SD Error"), true);
+    print_FatalError(sd_error_STR);
   }
 
   for (unsigned long currByte = romBase + 0xC00000; currByte < (romBase + 0xC00000 + 262144); currByte += 512) {
@@ -5284,15 +4297,14 @@ unsigned long verifyGameshark_N64() {
         myFile.read(sdBuffer, 512);
         for (int currByte = 0; currByte < 512; currByte += 2) {
           // Join two bytes into one word
-          word currWord = ( ( sdBuffer[currByte] & 0xFF ) << 8 ) | ( sdBuffer[currByte + 1] & 0xFF );
+          word currWord = ((sdBuffer[currByte] & 0xFF) << 8) | (sdBuffer[currByte + 1] & 0xFF);
           // Read flash
           setAddress_N64(romBase + 0xC00000 + currSector + currSdBuffer + currByte);
           // Compare both
           if (readWord_N64() != currWord) {
-            if ( (strcmp(flashid, "0808") == 0) && (currSector + currSdBuffer + currByte > 0x3F) && (currSector + currSdBuffer + currByte < 0x1080)) {
+            if ((flashid == 0x0808) && (currSector + currSdBuffer + currByte > 0x3F) && (currSector + currSdBuffer + currByte < 0x1080)) {
               // Gameshark maps this area to the bootcode of the plugged in cartridge
-            }
-            else {
+            } else {
               writeErrors++;
             }
           }
@@ -5302,9 +4314,8 @@ unsigned long verifyGameshark_N64() {
     // Close the file:
     myFile.close();
     return writeErrors;
-  }
-  else {
-    println_Msg(F("Can't open file"));
+  } else {
+    print_STR(open_file_STR, 1);
     display_Update();
     return 9999;
   }

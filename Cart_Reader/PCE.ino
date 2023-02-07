@@ -18,7 +18,6 @@
 #define HUCARD 0
 #define TURBOCHIP 1
 #define HUCARD_NOSWAP 2
-
 #define DETECTION_SIZE 64
 #define CHKSUM_SKIP 0
 #define CHKSUM_OK 1
@@ -42,8 +41,7 @@ void read_rom_PCE(void);
 /******************************************
    Variables
  *****************************************/
-uint8_t pce_internal_mode; //0 - HuCARD, 1 - TurboChip
-
+uint8_t pce_internal_mode;  //0 - HuCARD, 1 - TurboChip
 uint16_t pce_force_rom_size = 0;
 uint8_t tennokoe_bank_index = 0;
 
@@ -54,26 +52,26 @@ uint8_t tennokoe_bank_index = 0;
 static const char pceMenuItem1[] PROGMEM = "HuCARD (swapped)";
 static const char pceMenuItem2[] PROGMEM = "HuCARD(not swapped)";
 static const char pceMenuItem3[] PROGMEM = "Turbochip";
-static const char pceMenuItem4[] PROGMEM = "Reset";
-static const char* const menuOptionspce[] PROGMEM = {pceMenuItem1, pceMenuItem2, pceMenuItem3, pceMenuItem4};
+//static const char pceMenuItem4[] PROGMEM = "Reset"; (stored in common strings array)
+static const char *const menuOptionspce[] PROGMEM = { pceMenuItem1, pceMenuItem2, pceMenuItem3, string_reset2 };
 
 // PCE card menu items
-static const char pceCartMenuItem1[] = "Read ROM";
-static char pceCartMenuItem2[20];
-static char pceCartMenuItem3[20];
-static const char pceCartMenuItem4[] = "Reset";
-static const char pceCartMenuItem5[] = "Inc Bank Number";
-static const char pceCartMenuItem6[] = "Dec Bank Number";
-static char pceCartMenuItem7[20];
-static char menuOptionspceCart[7][20];
+static const char menuOptionspceCart_0[] PROGMEM = "Read ROM";
+static const char menuOptionspceCart_1_fmt[] PROGMEM = "Read RAM Bank %d";
+static const char menuOptionspceCart_2_fmt[] PROGMEM = "Write RAM Bank %d";
+static const char menuOptionspceCart_4[] PROGMEM = "Inc Bank Number";
+static const char menuOptionspceCart_5[] PROGMEM = "Dec Bank Number";
+static const char menuOptionspceCart_6_fmt[] PROGMEM = "ROM size now %dK";
+static const char menuOptionspceCart_6[] PROGMEM = "Force ROM size";
 
 // Turbochip menu items
 static const char pceTCMenuItem1[] PROGMEM = "Read ROM";
-static const char pceTCMenuItem2[] PROGMEM = "Reset";
-static const char* const menuOptionspceTC[] PROGMEM = {pceTCMenuItem1, pceTCMenuItem2};
+//static const char pceTCMenuItem2[] PROGMEM = "Reset"; (stored in common strings array)
+static const char *const menuOptionspceTC[] PROGMEM = { pceTCMenuItem1, string_reset2 };
 
 // PCE start menu
 void pcsMenu(void) {
+  vselect(false);
   // create menu with title and 3 options to choose from
   unsigned char pceDev;
   // Copy menuOptions out of progmem
@@ -81,8 +79,7 @@ void pcsMenu(void) {
   pceDev = question_box(F("Select device"), menuOptions, 3, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (pceDev)
-  {
+  switch (pceDev) {
     case 0:
       //Hucard
       display_Clear();
@@ -116,8 +113,7 @@ void pcsMenu(void) {
   }
 }
 
-void pin_read_write_PCE(void)
-{
+void pin_read_write_PCE(void) {
   // Set Address Pins to Output
   //A0-A7
   DDRF = 0xFF;
@@ -153,8 +149,7 @@ void pin_read_write_PCE(void)
   reset_cart_PCE();
 }
 
-void pin_init_PCE(void)
-{
+void pin_init_PCE(void) {
 
   //Set Address Pins to input and pull up
   DDRF = 0x00;
@@ -175,61 +170,67 @@ void pin_init_PCE(void)
   DDRC = 0x00;
   // Enable Internal Pullups
   PORTC = 0xFF;
-
 }
 
-void setup_cart_PCE(void)
-{
+void setup_cart_PCE(void) {
   // Set cicrstPin(PG1) to Output
   DDRG |= (1 << 1);
   // Output a high to disable CIC
   PORTG |= (1 << 1);
 
   pin_init_PCE();
-
 }
 
-void reset_cart_PCE(void)
-{
+void reset_cart_PCE(void) {
   //Set RESET as Low
   PORTH &= ~(1 << 0);
   delay(200);
   //Set RESET as High
   PORTH |= (1 << 0);
   delay(200);
-
 }
 
-void set_address_PCE(uint32_t address)
-{
+void set_address_PCE(uint32_t address) {
   //Set address
   PORTF = address & 0xFF;
   PORTK = (address >> 8) & 0xFF;
   PORTL = (PORTL & 0xF0) | ((address >> 16) & 0x0F);
 }
 
-void set_cs_rd_low_PCE ()
-{
+void set_cs_rd_low_PCE() {
   // Set CS(PL4) and RD(PH3) as LOW
   PORTL &= ~(1 << 4);
   PORTH &= ~(1 << 3);
 }
 
-uint8_t read_byte_PCE(uint32_t address)
-{
+uint8_t read_byte_PCE(uint32_t address) {
   uint8_t ret;
 
   set_address_PCE(address);
 
   // Arduino running at 16Mhz -> one nop = 62.5ns -> 1000ns total
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   //read byte
   ret = PINC;
 
   //Swap bit order for PC Engine HuCARD
-  if (pce_internal_mode == HUCARD)
-  {
+  if (pce_internal_mode == HUCARD) {
     ret = ((ret & 0x01) << 7) | ((ret & 0x02) << 5) | ((ret & 0x04) << 3) | ((ret & 0x08) << 1) | ((ret & 0x10) >> 1) | ((ret & 0x20) >> 3) | ((ret & 0x40) >> 5) | ((ret & 0x80) >> 7);
   }
 
@@ -237,12 +238,12 @@ uint8_t read_byte_PCE(uint32_t address)
   return ret;
 }
 
-void data_output_PCE () {
+void data_output_PCE() {
   // Set Data Pins (D0-D7) to Output
   DDRC = 0xFF;
 }
 
-void data_input_PCE () {
+void data_input_PCE() {
   // Set Data Pins (D0-D7) to Input
   DDRC = 0x00;
   // Enable Internal Pullups
@@ -251,17 +252,30 @@ void data_input_PCE () {
   set_cs_rd_low_PCE();
 }
 
-void write_byte_PCE(uint32_t address, uint8_t data)
-{
+void write_byte_PCE(uint32_t address, uint8_t data) {
   //PORTH |= (1 << 3); // RD HIGH
   set_address_PCE(address);
 
   // Arduino running at 16Mhz -> one nop = 62.5ns -> 1000ns total
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   //Swap bit order for PC Engine HuCARD
-  if (pce_internal_mode == HUCARD)
-  {
+  if (pce_internal_mode == HUCARD) {
     data = ((data & 0x01) << 7) | ((data & 0x02) << 5) | ((data & 0x04) << 3) | ((data & 0x08) << 1) | ((data & 0x10) >> 1) | ((data & 0x20) >> 3) | ((data & 0x40) >> 5) | ((data & 0x80) >> 7);
   }
 
@@ -273,22 +287,37 @@ void write_byte_PCE(uint32_t address, uint8_t data)
   PORTH &= ~(1 << 5);
 
   // Arduino running at 16Mhz -> one nop = 62.5ns -> 1000ns total
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Set CS(PL4) and WR(PH5) as HIGH
   PORTL |= (1 << 4);
   PORTH |= (1 << 5);
 }
 
-//Confirm the size of ROM - 128Kb, 256Kb, 384Kb, 512Kb, 768Kb or 1024Kb
-uint32_t detect_rom_size_PCE(void)
-{
+//Confirm the size of ROM
+uint32_t detect_rom_size_PCE(void) {
   uint32_t rom_size;
   uint8_t read_byte;
   uint8_t current_byte;
-  uint8_t detect_128, detect_256, detect_512, detect_768;
+  uint8_t detect_32, detect_128, detect_256, detect_512, detect_768;
 
   //Initialize variables
+  detect_32 = 0;
   detect_128 = 0;
   detect_256 = 0;
   detect_512 = 0;
@@ -297,98 +326,87 @@ uint32_t detect_rom_size_PCE(void)
   //Set pins to read PC Engine cart
   pin_read_write_PCE();
 
-  //Confirm where mirror address start from(128KB, 256KB, 512KB, 768, or 1024KB)
+  //Confirm where mirror address start from (32KB, 128KB, 256KB, 512KB, 768KB, or 1024KB)
   for (current_byte = 0; current_byte < DETECTION_SIZE; current_byte++) {
-    if ((current_byte != detect_128) && (current_byte != detect_256) && (current_byte != detect_512) && (current_byte != detect_768))
-    {
+    if ((current_byte != detect_32) && (current_byte != detect_128) && (current_byte != detect_256) && (current_byte != detect_512) && (current_byte != detect_768)) {
       //If none matched, it is 1024KB
       break;
     }
 
-    //read byte for 128KB, 256KB, 512KB detection
+    //read byte for 32KB, 128KB, 256KB, 512KB detection
     read_byte = read_byte_PCE(current_byte);
 
+    //32KB detection
+    if (current_byte == detect_32) {
+      if (read_byte_PCE(current_byte + 32UL * 1024UL) == read_byte) {
+        detect_32++;
+      }
+    }
+
     //128KB detection
-    if (current_byte == detect_128)
-    {
-      if (read_byte_PCE(current_byte + 128UL * 1024UL) == read_byte)
-      {
+    if (current_byte == detect_128) {
+      if (read_byte_PCE(current_byte + 128UL * 1024UL) == read_byte) {
         detect_128++;
       }
     }
 
     //256KB detection
-    if (current_byte == detect_256)
-    {
-      if (read_byte_PCE(current_byte + 256UL * 1024UL) == read_byte)
-      {
+    if (current_byte == detect_256) {
+      if (read_byte_PCE(current_byte + 256UL * 1024UL) == read_byte) {
         detect_256++;
       }
     }
 
     //512KB detection
-    if (current_byte == detect_512)
-    {
-      if (read_byte_PCE(current_byte + 512UL * 1024UL) == read_byte)
-      {
+    if (current_byte == detect_512) {
+      if (read_byte_PCE(current_byte + 512UL * 1024UL) == read_byte) {
         detect_512++;
       }
     }
 
     //768KB detection
     read_byte = read_byte_PCE(current_byte + 512UL * 1024UL);
-    if (current_byte == detect_768)
-    {
-      if (read_byte_PCE(current_byte + 768UL * 1024UL) == read_byte)
-      {
+    if (current_byte == detect_768) {
+      if (read_byte_PCE(current_byte + 768UL * 1024UL) == read_byte) {
         detect_768++;
       }
     }
   }
 
   //debug
-  //sprintf(fileName, "%d %d %d %d", detect_128, detect_256, detect_512, detect_768); //using filename global variable as string. Initialzed in below anyways.
+  //sprintf(fileName, "%d %d %d %d %d", detect_32, detect_128, detect_256, detect_512, detect_768); //using filename global variable as string. Initialzed in below anyways.
   //println_Msg(fileName);
 
   //ROM size detection by result
-  if (detect_128 == DETECTION_SIZE)
-  {
+  if (detect_32 == DETECTION_SIZE) {
+    rom_size = 32;
+  } else if (detect_128 == DETECTION_SIZE) {
     rom_size = 128;
-  }
-  else if (detect_256 == DETECTION_SIZE)
-  {
-    if (detect_512 == DETECTION_SIZE)
-    {
+  } else if (detect_256 == DETECTION_SIZE) {
+    if (detect_512 == DETECTION_SIZE) {
       rom_size = 256;
-    }
-    else
-    {
+    } else {
       //rom_size = 1024;
       //Another confirmation for 384KB because 384KB hucard has data in 0x0--0x40000 and 0x80000--0xA0000(0x40000 is mirror of 0x00000)
       rom_size = 384;
     }
-  }
-  else if (detect_512 == DETECTION_SIZE)
-  {
+  } else if (detect_512 == DETECTION_SIZE) {
     rom_size = 512;
-  }
-  else if (detect_768 == DETECTION_SIZE)
-  {
+  } else if (detect_768 == DETECTION_SIZE) {
     rom_size = 768;
-  }
-  else
-  {
+  } else {
     rom_size = 1024;
   }
 
-  //If rom size is more than or equal to 512KB, detect Street fighter II'
-  if (rom_size >= 512)
-  {
-    //Look for "NEC HE "
-    if (read_byte_PCE(0x7FFF9) == 'N' && read_byte_PCE(0x7FFFA) == 'E'  && read_byte_PCE(0x7FFFB) == 'C'
-        && read_byte_PCE(0x7FFFC) == ' ' && read_byte_PCE(0x7FFFD) == 'H' && read_byte_PCE(0x7FFFE) == 'E')
-    {
+  //If rom size is more than or equal to 512KB, detect special cards
+  if (rom_size >= 512) {
+    //Street Fighter II' - Champion Edition (Japan)
+    if (read_byte_PCE(0x7FFF9) == 'N' && read_byte_PCE(0x7FFFA) == 'E' && read_byte_PCE(0x7FFFB) == 'C' && read_byte_PCE(0x7FFFC) == ' ' && read_byte_PCE(0x7FFFD) == 'H' && read_byte_PCE(0x7FFFE) == 'E') {
       rom_size = 2560;
+    }
+    //Populous (Japan)
+    if (read_byte_PCE(0x1F26) == 'P' && read_byte_PCE(0x1F27) == 'O' && read_byte_PCE(0x1F28) == 'P' && read_byte_PCE(0x1F29) == 'U' && read_byte_PCE(0x1F2A) == 'L' && read_byte_PCE(0x1F2B) == 'O' && read_byte_PCE(0x1F2C) == 'U' && read_byte_PCE(0x1F2D) == 'S') {
+      rom_size = 512;
     }
   }
 
@@ -396,8 +414,7 @@ uint32_t detect_rom_size_PCE(void)
 }
 
 /* Must be address_start and address_end should be 512 byte aligned */
-void read_bank_PCE_ROM(uint32_t address_start, uint32_t address_end, uint32_t *processed_size, uint32_t total_size, uint32_t *crcp)
-{
+void read_bank_PCE_ROM(uint32_t address_start, uint32_t address_end, uint32_t *processed_size, uint32_t total_size, uint32_t *crcp) {
   uint32_t currByte;
   uint16_t c;
 
@@ -414,47 +431,41 @@ void read_bank_PCE_ROM(uint32_t address_start, uint32_t address_end, uint32_t *p
   }
 }
 
-void read_bank_PCE_RAM(uint32_t address_start, int block_index)
-{
+void read_bank_PCE_RAM(uint32_t address_start, int block_index) {
   uint32_t start = address_start + block_index * 512;
   for (uint16_t c = 0; c < 512; c++) {
     sdBuffer[c] = read_byte_PCE(start + c);
   }
 }
 
-uint32_t calculate_crc32(int n, unsigned char c[], uint32_t r)
-{
+uint32_t calculate_crc32(int n, unsigned char c[], uint32_t r) {
   int i, j;
 
   for (i = 0; i < n; i++) {
     r ^= c[i];
     for (j = 0; j < 8; j++)
       if (r & 1) r = (r >> 1) ^ 0xEDB88320UL;
-      else       r >>= 1;
+      else r >>= 1;
   }
   return r;
 }
 
-void crc_search(char *file_p, char *folder_p, uint32_t rom_size, uint32_t crc)
-{
+void crc_search(char *file_p, char *folder_p, uint32_t rom_size __attribute__((unused)), uint32_t crc) {
   FsFile rom, script;
-  uint32_t r, processedsize;
   char gamename[100];
   char crc_file[9], crc_search[9];
   uint8_t flag;
   flag = CHKSUM_SKIP;
 
   //Open list file. If no list file found, just skip
-  sd.chdir("/"); //Set read directry to root
-  if (script.open("pce.txt", O_READ))
-  {
+  sd.chdir("/");  //Set read directry to root
+  if (script.open("pce.txt", O_READ)) {
     //Calculate CRC of ROM file
     sd.chdir(folder_p);
-    if (rom.open(file_p, O_READ))
-    {
+    if (rom.open(file_p, O_READ)) {
       //Initialize flag as error
       flag = CHKSUM_ERROR;
-      crc = crc ^ 0xFFFFFFFFUL; //Finish CRC calculation and progress bar
+      crc = crc ^ 0xFFFFFFFFUL;  //Finish CRC calculation and progress bar
       //Display calculated CRC
       sprintf(crc_file, "%08lX", crc);
 
@@ -463,20 +474,17 @@ void crc_search(char *file_p, char *folder_p, uint32_t rom_size, uint32_t crc)
         //Read 2 lines (game name and CRC)
         get_line(gamename, &script, 96);
         get_line(crc_search, &script, 9);
-        skip_line(&script); //Skip every 3rd line
+        skip_line(&script);  //Skip every 3rd line
 
         //if checksum search successful, rename the file and end search
-        if (strcmp(crc_search, crc_file) == 0)
-        {
+        if (strcmp(crc_search, crc_file) == 0) {
           print_Msg(F("Chksum OK "));
           println_Msg(crc_file);
           print_Msg(F("Saved to "));
           print_Msg(folder_p);
           print_Msg(F("/"));
           print_Msg(gamename);
-          //print_Msg(F(".pce"));
           flag = CHKSUM_OK;
-          //strcat(gamename, ".pce");
           rom.rename(gamename);
           break;
         }
@@ -485,16 +493,12 @@ void crc_search(char *file_p, char *folder_p, uint32_t rom_size, uint32_t crc)
     }
   }
 
-
-  if (flag == CHKSUM_SKIP)
-  {
+  if (flag == CHKSUM_SKIP) {
     print_Msg(F("Saved to "));
     print_Msg(folder_p);
     print_Msg(F("/"));
     print_Msg(file_p);
-  }
-  else if (flag == CHKSUM_ERROR)
-  {
+  } else if (flag == CHKSUM_ERROR) {
     print_Msg(F("Chksum Error "));
     println_Msg(crc_file);
     print_Msg(F("Saved to "));
@@ -504,31 +508,23 @@ void crc_search(char *file_p, char *folder_p, uint32_t rom_size, uint32_t crc)
   }
 
   script.close();
-
 }
 
-void unlock_tennokoe_bank_RAM()
-{
-  write_byte_PCE(0x0D0000, 0x68); //Unlock RAM sequence 1 Bank 68
-  write_byte_PCE(0x0F0000, 0x00); //Unlock RAM sequence 2 Bank 78
-  write_byte_PCE(0x0F0000, 0x73); //Unlock RAM sequence 3 Bank 78
-  write_byte_PCE(0x0F0000, 0x73); //Unlock RAM sequence 4 Bank 78
-  write_byte_PCE(0x0F0000, 0x73); //Unlock RAM sequence 5 Bank 78
+void unlock_tennokoe_bank_RAM() {
+  write_byte_PCE(0x0D0000, 0x68);  //Unlock RAM sequence 1 Bank 68
+  write_byte_PCE(0x0F0000, 0x00);  //Unlock RAM sequence 2 Bank 78
+  write_byte_PCE(0x0F0000, 0x73);  //Unlock RAM sequence 3 Bank 78
+  write_byte_PCE(0x0F0000, 0x73);  //Unlock RAM sequence 4 Bank 78
+  write_byte_PCE(0x0F0000, 0x73);  //Unlock RAM sequence 5 Bank 78
 }
 
-void lock_tennokoe_bank_RAM()
-{
-  write_byte_PCE(0x0D0000, 0x68); //Lock RAM sequence 1 Bank 68
-  write_byte_PCE(0x0F0001, 0x00); //Lock RAM sequence 2 Bank 78
-  write_byte_PCE(0x0C0001, 0x60); //Lock RAM sequence 3 Bank 60
+void lock_tennokoe_bank_RAM() {
+  write_byte_PCE(0x0D0000, 0x68);  //Lock RAM sequence 1 Bank 68
+  write_byte_PCE(0x0F0001, 0x00);  //Lock RAM sequence 2 Bank 78
+  write_byte_PCE(0x0C0001, 0x60);  //Lock RAM sequence 3 Bank 60
 }
 
-void read_tennokoe_bank_PCE(int bank_index)
-{
-  uint32_t processed_size = 0;
-  uint32_t verify_loop;
-  uint8_t verify_flag = 1;
-
+void read_tennokoe_bank_PCE(int bank_index) {
   //clear the screen
   display_Clear();
 
@@ -556,7 +552,7 @@ void read_tennokoe_bank_PCE(int bank_index)
 
   //open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't create file on SD"), true);
+    print_FatalError(create_file_STR);
   }
 
   pin_read_write_PCE();
@@ -599,8 +595,8 @@ void read_tennokoe_bank_PCE(int bank_index)
     }
     if (block_index == 0 && sdBuffer[2] == 0x42 && sdBuffer[3] == 0x4D) {
       if (sdBuffer[0] != 0x48 || sdBuffer[1] != 0x55) {
-        sdBuffer[0] = 0x48; // H
-        sdBuffer[1] = 0x55; // U
+        sdBuffer[0] = 0x48;  // H
+        sdBuffer[1] = 0x55;  // U
         println_Msg(F("Corrected header"));
       } else {
         println_Msg(F("Header is correct"));
@@ -613,11 +609,9 @@ void read_tennokoe_bank_PCE(int bank_index)
 
   //Close the file:
   myFile.close();
-
 }
 
-void write_tennokoe_bank_PCE(int bank_index)
-{
+void write_tennokoe_bank_PCE(int bank_index) {
   //Display file Browser and wait user to select a file. Size must be 2KB.
   filePath[0] = '\0';
   sd.chdir("/");
@@ -697,8 +691,8 @@ void write_tennokoe_bank_PCE(int bank_index)
     } else {
       println_Msg(F("Verify failed..."));
       print_Msg(diffcnt);
-      println_Msg(F(" bytes "));
-      print_Error(F("did not verify."), false);
+      print_STR(_bytes_STR, 1);
+      print_Error(did_not_verify_STR);
     }
 
     pin_init_PCE();
@@ -708,14 +702,12 @@ void write_tennokoe_bank_PCE(int bank_index)
     println_Msg(F("Finished"));
     display_Update();
     wait();
-  }
-  else {
-    print_Error(F("File doesn't exist"), false);
+  } else {
+    print_Error(F("File doesn't exist"));
   }
 }
 
-void read_rom_PCE(void)
-{
+void read_rom_PCE(void) {
   uint32_t rom_size;
   uint32_t processed_size = 0;
 
@@ -754,7 +746,7 @@ void read_rom_PCE(void)
 
   //open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't create file on SD"), true);
+    print_FatalError(create_file_STR);
   }
 
   pin_read_write_PCE();
@@ -762,36 +754,31 @@ void read_rom_PCE(void)
   //Initialize progress bar by setting processed size as 0
   draw_progressbar(0, rom_size * 1024UL);
 
-  uint32_t crc = 0xFFFFFFFFUL; //Initialize CRC
-  if (rom_size == 384)
-  {
+  uint32_t crc = 0xFFFFFFFFUL;  //Initialize CRC
+  if (rom_size == 384) {
     //Read two sections. 0x000000--0x040000 and 0x080000--0x0A0000 for 384KB
     read_bank_PCE_ROM(0, 0x40000, &processed_size, rom_size * 1024UL, &crc);
     read_bank_PCE_ROM(0x80000, 0xA0000, &processed_size, rom_size * 1024UL, &crc);
-  }
-  else if (rom_size == 2560)
-  {
+  } else if (rom_size == 2560) {
     //Dump Street fighter II' Champion Edition
     read_bank_PCE_ROM(0, 0x80000, &processed_size, rom_size * 1024UL, &crc);  //Read first bank
     data_output_PCE();
-    write_byte_PCE(0x1FF0, 0xFF); //Display second bank
+    write_byte_PCE(0x1FF0, 0xFF);  //Display second bank
     data_input_PCE();
-    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc); //Read second bank
+    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc);  //Read second bank
     data_output_PCE();
-    write_byte_PCE(0x1FF1, 0xFF); //Display third bank
+    write_byte_PCE(0x1FF1, 0xFF);  //Display third bank
     data_input_PCE();
-    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc); //Read third bank
+    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc);  //Read third bank
     data_output_PCE();
-    write_byte_PCE(0x1FF2, 0xFF); //Display forth bank
+    write_byte_PCE(0x1FF2, 0xFF);  //Display forth bank
     data_input_PCE();
-    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc); //Read forth bank
+    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc);  //Read forth bank
     data_output_PCE();
-    write_byte_PCE(0x1FF3, 0xFF); //Display fifth bank
+    write_byte_PCE(0x1FF3, 0xFF);  //Display fifth bank
     data_input_PCE();
-    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc); //Read fifth bank
-  }
-  else
-  {
+    read_bank_PCE_ROM(0x80000, 0x100000, &processed_size, rom_size * 1024UL, &crc);  //Read fifth bank
+  } else {
     //Read start form 0x000000 and keep reading until end of ROM
     read_bank_PCE_ROM(0, rom_size * 1024UL, &processed_size, rom_size * 1024UL, &crc);
   }
@@ -810,27 +797,22 @@ void pceMenu() {
   // create menu with title and 7 options to choose from
   unsigned char mainMenu;
 
-  if (pce_internal_mode == HUCARD || pce_internal_mode == HUCARD_NOSWAP)
-  {
-    sprintf(pceCartMenuItem2, "Read RAM Bank %d", tennokoe_bank_index + 1);
-    sprintf(pceCartMenuItem3, "Write RAM Bank %d", tennokoe_bank_index + 1);
-    strcpy(menuOptionspceCart[0], pceCartMenuItem1);
-    strcpy(menuOptionspceCart[1], pceCartMenuItem2);
-    strcpy(menuOptionspceCart[2], pceCartMenuItem3);
-    strcpy(menuOptionspceCart[3], pceCartMenuItem4);
-    strcpy(menuOptionspceCart[4], pceCartMenuItem5);
-    strcpy(menuOptionspceCart[5], pceCartMenuItem6);
+  if (pce_internal_mode == HUCARD || pce_internal_mode == HUCARD_NOSWAP) {
+    strcpy_P(menuOptions[0], menuOptionspceCart_0);
+    sprintf_P(menuOptions[1], menuOptionspceCart_1_fmt, tennokoe_bank_index + 1);
+    sprintf_P(menuOptions[2], menuOptionspceCart_2_fmt, tennokoe_bank_index + 1);
+    strcpy_P(menuOptions[3], string_reset2);
+    strcpy_P(menuOptions[4], menuOptionspceCart_4);
+    strcpy_P(menuOptions[5], menuOptionspceCart_5);
     if (pce_force_rom_size > 0) {
-      sprintf(pceCartMenuItem7, "ROM size now %dK", pce_force_rom_size);
+      sprintf_P(menuOptions[6], menuOptionspceCart_6_fmt, pce_force_rom_size);
     } else {
-      sprintf(pceCartMenuItem7, "Force ROM size");
+      strcpy_P(menuOptions[6], menuOptionspceCart_6);
     }
-    strcpy(menuOptionspceCart[6], pceCartMenuItem7);
-    mainMenu = question_box(F("PCE HuCARD menu"), menuOptionspceCart, 7, 0);
+    mainMenu = question_box(F("PCE HuCARD menu"), menuOptions, 7, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (mainMenu)
-    {
+    switch (mainMenu) {
       case 0:
         display_Clear();
         // Change working dir to root
@@ -862,16 +844,13 @@ void pceMenu() {
         pce_force_rom_size = 1024;
         break;
     }
-  }
-  else
-  {
+  } else {
     // Copy menuOptions out of progmem
     convertPgm(menuOptionspceTC, 2);
     mainMenu = question_box(F("TG TurboChip menu"), menuOptions, 2, 0);
 
     // wait for user choice to come back from the question box menu
-    switch (mainMenu)
-    {
+    switch (mainMenu) {
       case 0:
         display_Clear();
         // Change working dir to root
@@ -886,7 +865,8 @@ void pceMenu() {
   }
 
   println_Msg(F(""));
-  println_Msg(F("Press Button..."));
+  // Prints string out of the common strings array either with or without newline
+  print_STR(press_button_STR, 1);
   display_Update();
   wait();
 }

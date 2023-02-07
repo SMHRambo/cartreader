@@ -14,9 +14,10 @@ static const char gbmMenuItem4[] PROGMEM = "Blankcheck";
 static const char gbmMenuItem5[] PROGMEM = "Write Flash";
 static const char gbmMenuItem6[] PROGMEM = "Read Mapping";
 static const char gbmMenuItem7[] PROGMEM = "Write Mapping";
-static const char* const menuOptionsGBM[] PROGMEM = {gbmMenuItem1, gbmMenuItem2, gbmMenuItem3, gbmMenuItem4, gbmMenuItem5, gbmMenuItem6, gbmMenuItem7};
+static const char* const menuOptionsGBM[] PROGMEM = { gbmMenuItem1, gbmMenuItem2, gbmMenuItem3, gbmMenuItem4, gbmMenuItem5, gbmMenuItem6, gbmMenuItem7 };
 
 void gbmMenu() {
+  vselect(false);
   // create menu with title and 7 options to choose from
   unsigned char mainMenu;
   // Copy menuOptions out of progmem
@@ -24,8 +25,7 @@ void gbmMenu() {
   mainMenu = question_box(F("GB Memory Menu"), menuOptions, 7, 0);
 
   // wait for user choice to come back from the question box menu
-  switch (mainMenu)
-  {
+  switch (mainMenu) {
     // Read Flash ID
     case 0:
       // Clear screen
@@ -43,7 +43,8 @@ void gbmMenu() {
       println_Msg(F("cartreader directly"));
       println_Msg(F("before reading"));
       println_Msg("");
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
       // Clear screen
@@ -72,7 +73,8 @@ void gbmMenu() {
       println_Msg(F("NP Cartridge."));
       println_Msg("");
       println_Msg("");
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
       // Clear screen
@@ -87,8 +89,7 @@ void gbmMenu() {
       if (blankcheckFlash_GBM()) {
         println_Msg(F("OK"));
         display_Update();
-      }
-      else {
+      } else {
         println_Msg(F("ERROR"));
         display_Update();
       }
@@ -133,7 +134,8 @@ void gbmMenu() {
       println_Msg(F("NP Cartridge's"));
       println_Msg(F("mapping data"));
       println_Msg("");
-      println_Msg(F("Press Button..."));
+      // Prints string out of the common strings array either with or without newline
+      print_STR(press_button_STR, 1);
       display_Update();
       wait();
 
@@ -163,9 +165,8 @@ void gbmMenu() {
       if (blankcheckMapping_GBM()) {
         println_Msg(F("OK"));
         display_Update();
-      }
-      else {
-        print_Error(F("Erasing failed"), false);
+      } else {
+        print_Error(F("Erasing failed"));
         break;
       }
 
@@ -174,7 +175,8 @@ void gbmMenu() {
       break;
   }
   println_Msg(F(""));
-  println_Msg(F("Press Button..."));
+  // Prints string out of the common strings array either with or without newline
+  print_STR(press_button_STR, 1);
   display_Update();
   wait();
 }
@@ -211,11 +213,30 @@ void setup_GBM() {
   while (readByte_GBM(0x120) != 0x21) {
     // Enable ports 0x120h (F2)
     send_GBM(0x09);
-    __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+    __asm__("nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t"
+            "nop\n\t");
     timeout++;
     if (timeout > 10) {
       println_Msg(F("Error: Time Out"));
-      print_Error(F("Please power cycle"), true);
+      print_FatalError(F("Please power cycle"));
     }
   }
 }
@@ -230,13 +251,19 @@ byte readByte_GBM(word myAddress) {
   PORTF = myAddress & 0xFF;
   PORTK = (myAddress >> 8) & 0xFF;
 
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Switch CS(PH3) and RD(PH6) to LOW
   PORTH &= ~(1 << 3);
   PORTH &= ~(1 << 6);
 
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Read
   byte tempByte = PINC;
@@ -260,13 +287,19 @@ void writeByte_GBM(word myAddress, byte myData) {
   PORTH &= ~(1 << 3);
   PORTH &= ~(1 << 5);
 
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Pull CS(PH3) and write(PH5) high
   PORTH |= (1 << 5);
   PORTH |= (1 << 3);
 
-  __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+  __asm__("nop\n\t"
+          "nop\n\t"
+          "nop\n\t"
+          "nop\n\t");
 
   // Set data pins to Input (or read errors??!)
   DDRC = 0x0;
@@ -276,7 +309,7 @@ void writeByte_GBM(word myAddress, byte myData) {
   HELPER FUNCTIONS
 **********************/
 void printSdBuffer(word startByte, word numBytes) {
-  for (int currByte = 0; currByte < numBytes; currByte += 10) {
+  for (word currByte = 0; currByte < numBytes; currByte += 10) {
     for (byte c = 0; c < 10; c++) {
       // Convert to char array so we don't lose leading zeros
       char currByteStr[2];
@@ -305,9 +338,8 @@ void readROM_GBM(word numBanks) {
 
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't create file on SD"), true);
-  }
-  else {
+    print_FatalError(create_file_STR);
+  } else {
     // Read rom
     word currAddress = 0;
 
@@ -408,7 +440,7 @@ void send_GBM(byte myCommand) {
       break;
 
     default:
-      print_Error(F("Unknown Command"), true);
+      print_FatalError(F("Unknown Command"));
       break;
   }
 }
@@ -428,7 +460,7 @@ void send_GBM(byte myCommand, word myAddress, byte myData) {
       break;
 
     default:
-      print_Error(F("Unknown Command"), true);
+      print_FatalError(F("Unknown Command"));
       break;
   }
 }
@@ -465,18 +497,19 @@ boolean readFlashID_GBM() {
   send_GBM(0x0F, 0x5555, 0x90);
 
   // Read the two id bytes into a string
-  sprintf(flashid, "%02X%02X", readByte_GBM(0), readByte_GBM(1));
-  if (strcmp(flashid, "C289") == 0) {
+  flashid = readByte_GBM(0) << 8;
+  flashid |= readByte_GBM(1);
+  sprintf(flashid_str, "%04X", flashid);
+  if (flashid == 0xC289) {
     print_Msg(F("Flash ID: "));
-    println_Msg(flashid);
+    println_Msg(flashid_str);
     display_Update();
     resetFlash_GBM();
     return 1;
-  }
-  else {
+  } else {
     print_Msg(F("Flash ID: "));
-    println_Msg(flashid);
-    print_Error(F("Unknown Flash ID"), true);
+    println_Msg(flashid_str);
+    print_FatalError(F("Unknown Flash ID"));
     resetFlash_GBM();
     return 0;
   }
@@ -560,7 +593,7 @@ void writeFlash_GBM() {
     // Get rom size from file
     fileSize = myFile.fileSize();
     if ((fileSize / 0x4000) > 64) {
-      print_Error(F("File is too big."), true);
+      print_FatalError(F("File is too big."));
     }
 
     // Enable access to ports 0120h
@@ -651,10 +684,9 @@ void writeFlash_GBM() {
     }
     // Close the file:
     myFile.close();
-    println_Msg(F("Done"));
-  }
-  else {
-    print_Error(F("Can't open file"), false);
+    print_STR(done_STR, 1);
+  } else {
+    print_Error(F("Can't open file"));
   }
 }
 
@@ -691,9 +723,8 @@ void readMapping_GBM() {
 
   // Open file on sd card
   if (!myFile.open(fileName, O_RDWR | O_CREAT)) {
-    print_Error(F("Can't create file on SD"), true);
-  }
-  else {
+    print_FatalError(create_file_STR);
+  } else {
     for (byte currByte = 0; currByte < 128; currByte++) {
       sdBuffer[currByte] = readByte_GBM(currByte);
     }
@@ -791,7 +822,7 @@ void writeMapping_GBM() {
   if (myFile.open(filePath, O_READ)) {
     // Get map file size and check if it exceeds 128KByte
     if (myFile.fileSize() > 0x80) {
-      print_Error(F("File is too big."), true);
+      print_FatalError(F("File is too big."));
     }
 
     // Enable access to ports 0120h
@@ -867,10 +898,9 @@ void writeMapping_GBM() {
 
     // Close the file:
     myFile.close();
-    println_Msg(F("Done"));
-  }
-  else {
-    print_Error(F("Can't open file"), false);
+    print_STR(done_STR, 1);
+  } else {
+    print_Error(F("Can't open file"));
   }
 }
 
